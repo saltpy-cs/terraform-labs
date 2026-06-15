@@ -247,7 +247,11 @@ Now open `terraform/variables.tf` and add a fourth rule to the `firewall_rules` 
 
 Run `terraform plan` (before applying). The plan should show only the firewall rule updating — one new `allow` block is added. No instances or subnets should change.
 
-There is no apply here — the point is to observe how a single variable change maps to one extra `allow` block in the plan. Revert the change before continuing so that Exercise 2 applies the default configuration as written.
+There is no apply here — the point is to observe how a single variable change maps to one extra `allow` block in the plan. Remove the port 8080 line from `terraform/variables.tf` and confirm the revert — the plan should show three `allow` blocks in the firewall rule, not four:
+
+```bash
+terraform plan
+```
 
 ### Exercise 2 — Apply
 
