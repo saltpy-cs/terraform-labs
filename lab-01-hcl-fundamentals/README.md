@@ -195,20 +195,30 @@ Open `main.tf` and change the `separator` in `random_pet.name` from `"-"` to `"_
 terraform plan
 ```
 
-Read the plan output. You should see:
+Read the plan output. You should see two resources replaced:
 
 ```
+  # random_pet.name must be replaced
+-/+ resource "random_pet" "name" {
+      ~ id        = "old-name" -> (known after apply) # forces replacement
+      ~ separator = "-" -> "_"                        # forces replacement
+        length    = 2
+    }
+
   # null_resource.hello must be replaced
 -/+ resource "null_resource" "hello" {
       ~ triggers = {
-          ~ "name" = "old-name" -> (known after apply)  # forces replacement
+          ~ "name" = "old-name" -> (known after apply) # forces replacement
         }
     }
+
+Plan: 2 to add, 0 to change, 2 to destroy.
 ```
 
-The `-/+` symbol means Terraform will **destroy and recreate** this resource. It can't
-update in place because a trigger value changed. This is a key concept: some attribute
-changes require replacement.
+Two things to observe:
+- `-/+` means Terraform will **destroy and recreate** the resource — it cannot update in place
+- The replacement **cascades**: `separator` changing forces `random_pet.name` to be replaced, which generates a new `id`, which changes the `null_resource.hello` trigger, which forces that to be replaced too
+- `random_string.suffix` is unchanged — it has no dependency on `random_pet.name`
 
 ```bash
 terraform apply
