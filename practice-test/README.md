@@ -2,7 +2,7 @@
 
 A timed, hands-on exam simulation covering both the **Terraform Associate (003)** and
 **Terraform Authoring and Operations Professional** exam objectives. Questions are weighted
-toward Associate (82 of 100 points) with three Professional-level questions at the end.
+toward Associate (82 of 114 points) with five Professional-level questions at the end.
 
 This test simulates real exam conditions: you write actual Terraform code, run CLI commands,
 and verify your results against a live GCP environment. There are no multiple-choice questions.
@@ -13,11 +13,11 @@ and verify your results against a live GCP environment. There are no multiple-ch
 
 | Item | Detail |
 |------|--------|
-| Questions | 12 |
-| Total points | 100 |
+| Questions | 14 |
+| Total points | 114 |
 | Suggested time | 90 minutes |
-| Pass mark | 70 points |
-| Distinction | 85 points |
+| Pass mark | 80 points (70%) |
+| Distinction | 97 points (85%) |
 
 **Allowed reference material** — you may consult:
 - [registry.terraform.io](https://registry.terraform.io) — provider and module documentation
@@ -36,6 +36,8 @@ from this course.
 | 1–4 | Associate | 8 | 32 |
 | 5–9 | Associate+ | 10 | 50 |
 | 10–12 | Professional | 6 | 18 |
+| 13 | Professional | 8 | 8 |
+| 14 | Professional | 6 | 6 |
 
 ---
 
@@ -90,10 +92,10 @@ Setup takes approximately 60–120 seconds. Do not start the timer until `terraf
 
 | Score | Result |
 |-------|--------|
-| 85–100 | Distinction — ready for both exams |
-| 70–84 | Pass — solid Associate readiness, review Professional gaps |
-| 55–69 | Near miss — revisit labs covering missed questions |
-| < 55 | Needs more practice — review core concepts before testing |
+| 97–114 | Distinction — ready for both exams |
+| 80–96 | Pass — solid Associate readiness, review Professional gaps |
+| 63–79 | Near miss — revisit labs covering missed questions |
+| < 63 | Needs more practice — review core concepts before testing |
 
 Each question is scored as complete or incomplete — there is no partial credit.
 
@@ -109,7 +111,7 @@ After you have finished and recorded your score, destroy all resources to avoid 
 ```bash
 # Destroy question resources (null_resource and local providers only — free)
 # These have no cloud cost but clean up state files:
-for q in q01 q02 q04 q05 q06 q07 q08 q10 q11 q12; do
+for q in q01 q02 q04 q05 q06 q07 q08 q10 q11 q12 q13 q14; do
   dir="$HOME/tf-practice/$q"
   if [ -d "$dir" ]; then
     echo "Destroying $q..."

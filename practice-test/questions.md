@@ -326,6 +326,94 @@ tolist([
 
 ---
 
+## Question 13 — lifecycle Rules: prevent_destroy and create_before_destroy (8 points) — Professional
+
+**Objective:** Protect a critical simulated resource from accidental deletion and observe replacement ordering.
+
+In `~/tf-practice/q13/`:
+
+1. Declare the `hashicorp/null` provider.
+2. Create a `null_resource` named `production_db` with:
+   - a `triggers` block containing `version = "v1"`
+   - a `lifecycle` block setting both `prevent_destroy = true` and `create_before_destroy = true`
+3. Create a second `null_resource` named `app_server` with a trigger `db_id = null_resource.production_db.id` (this simulates a dependency on the database).
+4. Apply the configuration.
+5. Attempt `terraform destroy -auto-approve`. Observe the error message — note which lifecycle attribute caused the failure and on which resource.
+6. Without changing anything else, change the `version` trigger to `"v2"` **and** remove the `prevent_destroy = true` line from the lifecycle block. Keep `create_before_destroy = true`.
+7. Run `terraform plan` — observe that `null_resource.production_db` must be replaced and note the replacement ordering in the plan output (look for `(deposed)` or the create-before-destroy ordering marker).
+8. Apply and verify both resources exist in state.
+
+**Verification — step 5 (destroy must fail):**
+```bash
+cd ~/tf-practice/q13
+terraform destroy -auto-approve
+```
+Expected: an error containing `prevent_destroy` (the apply should not proceed).
+
+**Verification — step 8 (both resources exist after replacement):**
+```bash
+cd ~/tf-practice/q13
+terraform state list
+```
+Expected:
+```
+null_resource.app_server
+null_resource.production_db
+```
+
+---
+
+## Question 14 — Operational Trigger Pattern (6 points) — Professional
+
+**Objective:** Implement the timestamp-based `null_resource` trigger pattern used to invoke one-off operational actions from `terraform apply`.
+
+In `~/tf-practice/q14/`:
+
+1. Declare the `hashicorp/null` provider.
+2. Declare a `string` variable named `operation_timestamp` with a default of `""`.
+3. Create a `null_resource` named `trigger` with:
+   - `count = var.operation_timestamp != "" ? 1 : 0`
+   - a `triggers` block with a single key `ts = var.operation_timestamp`
+   - a `local-exec` provisioner that prints `"Operation triggered at <timestamp>"` (substitute the actual variable value)
+4. Declare an output named `operation_ran` with value `"yes"` when `operation_timestamp` is non-empty, `"no"` otherwise.
+
+Then perform all four steps in order and verify each result:
+
+**a.** Apply without setting `operation_timestamp`:
+```bash
+terraform apply -auto-approve
+terraform output operation_ran   # Expected: "no"
+terraform state list             # Expected: (empty — no null_resource)
+```
+
+**b.** Apply with a timestamp — record the value you used:
+```bash
+TS=$(date +%s)
+terraform apply -auto-approve -var="operation_timestamp=${TS}"
+# Expected: null_resource.trigger[0] is created, provisioner output is visible
+terraform output operation_ran   # Expected: "yes"
+```
+
+**c.** Apply again with the SAME timestamp from step (b):
+```bash
+terraform apply -auto-approve -var="operation_timestamp=${TS}"
+# Expected: "No changes." — triggers unchanged, provisioner does NOT re-run
+```
+
+**d.** Apply with a new timestamp:
+```bash
+terraform apply -auto-approve -var="operation_timestamp=$(date +%s)"
+# Expected: null_resource.trigger[0] is replaced, provisioner runs again
+```
+
+**Verification — step (b) output:**
+```bash
+terraform output operation_ran
+```
+Expected: `"yes"`
+
+---
+
 ## Scoring Checklist
 
 | # | Question | Points | Complete? |
@@ -342,7 +430,9 @@ tolist([
 | 10 | Workspaces | 6 | [ ] |
 | 11 | terraform test | 6 | [ ] |
 | 12 | Complex for expression | 6 | [ ] |
-| | **Total** | **100** | |
+| 13 | lifecycle rules: prevent_destroy, create_before_destroy | 8 | [ ] |
+| 14 | Operational trigger pattern | 6 | [ ] |
+| | **Total** | **114** | |
 
 ---
 
@@ -947,3 +1037,142 @@ tolist([
 > Map iteration in Terraform is ordered lexicographically by key, so `api` will always
 > appear before `web`. If you need explicit sorting, wrap with `sort()`:
 > `value = sort(local.connection_strings)`.
+
+---
+
+### Solution — Q13: lifecycle Rules
+
+**`~/tf-practice/q13/main.tf`**
+```hcl
+terraform {
+  required_providers {
+    null = {
+      source  = "hashicorp/null"
+      version = ">= 3.0"
+    }
+  }
+}
+
+resource "null_resource" "production_db" {
+  triggers = {
+    version = "v1"
+  }
+
+  lifecycle {
+    prevent_destroy       = true
+    create_before_destroy = true
+  }
+}
+
+resource "null_resource" "app_server" {
+  triggers = {
+    db_id = null_resource.production_db.id
+  }
+}
+```
+
+```bash
+cd ~/tf-practice/q13
+terraform init
+terraform apply -auto-approve
+
+# Step 5 — attempt destroy (will fail):
+terraform destroy -auto-approve
+# Error: Instance cannot be destroyed
+# on main.tf line X, in resource "null_resource" "production_db":
+#   prevent_destroy = true
+```
+
+Step 6 — edit main.tf: change `version = "v1"` to `version = "v2"` and remove `prevent_destroy = true`. The lifecycle block should now contain only `create_before_destroy = true`.
+
+```bash
+# Step 7 — observe replacement ordering:
+terraform plan
+# null_resource.production_db must be replaced
+# With create_before_destroy = true, the plan shows the new instance is
+# created first, then the old instance is deposed (destroyed).
+# Look for "(deposed)" in the plan output.
+
+# Step 8 — apply and verify:
+terraform apply -auto-approve
+terraform state list
+# null_resource.app_server
+# null_resource.production_db
+```
+
+> `prevent_destroy = true` guards against both `terraform destroy` and any plan that would
+> destroy the resource as part of a replacement. It must be removed from code (not just
+> from state) before Terraform will allow destruction. `create_before_destroy = true` changes
+> replacement ordering: the new resource is created and its ID is written to state before the
+> old resource is destroyed. Resources that depend on the replaced resource (like `app_server`)
+> see the new ID without a window where the resource is absent.
+
+---
+
+### Solution — Q14: Operational Trigger Pattern
+
+**`~/tf-practice/q14/main.tf`**
+```hcl
+terraform {
+  required_providers {
+    null = {
+      source  = "hashicorp/null"
+      version = ">= 3.0"
+    }
+  }
+}
+
+variable "operation_timestamp" {
+  type    = string
+  default = ""
+}
+
+resource "null_resource" "trigger" {
+  count = var.operation_timestamp != "" ? 1 : 0
+
+  triggers = {
+    ts = var.operation_timestamp
+  }
+
+  provisioner "local-exec" {
+    command = "echo 'Operation triggered at ${var.operation_timestamp}'"
+  }
+}
+
+output "operation_ran" {
+  value = var.operation_timestamp != "" ? "yes" : "no"
+}
+```
+
+```bash
+cd ~/tf-practice/q14
+terraform init
+
+# Step a — no timestamp:
+terraform apply -auto-approve
+terraform output operation_ran   # "no"
+terraform state list             # (empty)
+
+# Step b — set a timestamp:
+TS=$(date +%s)
+terraform apply -auto-approve -var="operation_timestamp=${TS}"
+# null_resource.trigger[0] created; provisioner prints "Operation triggered at <ts>"
+terraform output operation_ran   # "yes"
+
+# Step c — same timestamp again:
+terraform apply -auto-approve -var="operation_timestamp=${TS}"
+# "No changes." — triggers map unchanged, provisioner does NOT re-run
+
+# Step d — new timestamp:
+terraform apply -auto-approve -var="operation_timestamp=$(date +%s)"
+# null_resource.trigger[0] is REPLACED (new triggers), provisioner runs again
+```
+
+> The key insight: Terraform decides whether to re-run a null_resource provisioner by
+> comparing the current `triggers` map to the stored one in state. If they match, Terraform
+> sees the resource as up-to-date and skips it — the provisioner does not run. A unique
+> timestamp guarantees the triggers map changes on every intended invocation.
+>
+> A boolean (`true`/`true`) trigger fails for the same reason: the second apply sees
+> `trigger = true` in state and `trigger = true` in config — no change, no re-run.
+> The timestamp pattern is the correct solution for retriggerable operations.
