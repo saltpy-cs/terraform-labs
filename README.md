@@ -91,6 +91,7 @@ or `us-east1`. Standard GCS storage costs $0.020/GB/month — negligible for sma
 | [08 - Complex Expressions](lab-08-complex-expressions/README.md) | for, splat, templatefile, conditionals | GCP | Pro |
 | [09 - Workspaces](lab-09-workspaces/README.md) | Workspace commands, env patterns | GCP | Associate + Pro |
 | [10 - Testing & HCP Terraform](lab-10-testing-hcp/README.md) | terraform test, HCP Terraform, Sentinel | GCP + HCP | Pro |
+| [11 - Multi-Zone Resilience](lab-11-multi-zone-resilience/README.md) | RTO/RPO, Regional MIG, auto-healing, NLB, state DR | GCP | Pro |
 | [Practice Test](practice-test/README.md) | Full exam simulation | — | Associate + Pro |
 
 ## How to Work Through the Labs

@@ -1,0 +1,11 @@
+gcp_project  = "your-project-id"
+gcp_region   = "us-central1"
+project_name = "tf-lab11"
+state_bucket = "your-state-bucket-name"  # create with: gsutil mb -l us-central1 gs://YOUR_BUCKET
+my_ip_cidr   = "YOUR_IP/32"              # run: curl ifconfig.me
+
+# Optional overrides:
+# zones        = ["us-central1-a", "us-central1-b", "us-central1-c"]
+# machine_type = "e2-micro"
+# min_replicas = 3
+# max_replicas = 9
