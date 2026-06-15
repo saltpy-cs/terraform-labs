@@ -394,7 +394,7 @@ google_storage_bucket.us
 Both are managed by the `google` provider, but the alias distinguishes which provider instance manages which resource. You can verify by pulling the raw state entry:
 
 ```bash
-terraform show -json | python3 -m json.tool | grep -A5 '"europe"'
+terraform show -json | jq '.values.root_module.resources[] | select(.address | contains("europe"))'
 ```
 
 ### Exercise 10 — Destroy

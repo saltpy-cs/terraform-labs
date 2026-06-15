@@ -258,7 +258,7 @@ bucket_url  = "gs://tf-lab03-tfstate-a1b2c3d4"
 The bootstrap config uses local state. Examine it:
 
 ```bash
-cat terraform.tfstate | python3 -m json.tool | head -80
+jq '.' terraform.tfstate | head -80
 ```
 
 Expected output (abbreviated):
@@ -301,12 +301,7 @@ Notice:
 Find the GCS bucket resource specifically:
 
 ```bash
-cat terraform.tfstate | python3 -c "
-import json, sys
-state = json.load(sys.stdin)
-buckets = [r for r in state['resources'] if r['type'] == 'google_storage_bucket']
-print(json.dumps(buckets, indent=2))
-"
+jq '[.resources[] | select(.type == "google_storage_bucket")]' terraform.tfstate
 ```
 
 ---
@@ -405,7 +400,7 @@ gs://tf-lab03-tfstate-a1b2c3d4/lab03/app/default.tfstate
 You can download and read the state file directly:
 
 ```bash
-gsutil cat gs://<your-state-bucket-name>/lab03/app/default.tfstate | python3 -m json.tool
+gsutil cat gs://<your-state-bucket-name>/lab03/app/default.tfstate | jq '.'
 ```
 
 Or using the newer `gcloud storage` command:
