@@ -1,0 +1,30 @@
+# Copy to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit real credentials.
+
+gcp_project = "your-project-id"
+
+# Region and zones — all three must be in the same region.
+# us-central1 has a/b/c/f zones; all support Cloud SQL and Memorystore.
+gcp_region     = "us-central1"
+primary_zone   = "us-central1-a"
+secondary_zone = "us-central1-b"
+
+project_name = "tf-lab12"
+
+# Cloud SQL tier — db-f1-micro is cheapest. REGIONAL doubles the hourly cost.
+# Expected cost: ~$0.02/hr while the lab is running.
+db_tier    = "db-f1-micro"
+db_version = "POSTGRES_16"
+
+# Memorystore Redis — 1GB STANDARD_HA costs ~$0.098/hr.
+redis_memory_gb = 1
+
+# Failover triggers — leave empty during initial deploy.
+# Set to $(date +%s) when you want to trigger a switchover (Exercises 7–9).
+failover_timestamp       = ""
+redis_failover_timestamp = ""
+
+# Redis failover data protection mode.
+# "limited-data-loss" (default) waits for replica sync before promoting.
+# "force-data-loss" promotes immediately — use only for testing.
+redis_data_protection_mode = "limited-data-loss"

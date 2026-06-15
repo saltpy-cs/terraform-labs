@@ -1,8 +1,8 @@
 # Terraform Labs
 
-A progressive series of 10 hands-on labs covering Terraform from first principles to
+A progressive series of hands-on labs covering Terraform from first principles to
 advanced patterns. Labs 01–07 align with the **Terraform Associate** exam objectives.
-Labs 08–10 introduce **Terraform Authoring and Operations Professional** topics.
+Labs 08–12 introduce **Terraform Authoring and Operations Professional** topics.
 
 ## Prerequisites
 
@@ -71,6 +71,8 @@ clean up promptly:
 | 08  | GCE e2-micro, GCS bucket | ~$0.00 |
 | 09  | GCE e2-micro × 2 workspaces | < $0.02 |
 | 10  | GCS bucket | ~$0.00 |
+| 11  | Regional MIG, NLB | ~$0.05 |
+| 12  | Cloud SQL REGIONAL, Memorystore STANDARD_HA | **~$0.12/hr** — destroy promptly |
 
 GCP's free tier includes 1 e2-micro instance per month in `us-central1`, `us-west1`,
 or `us-east1`. Standard GCS storage costs $0.020/GB/month — negligible for small objects.
@@ -92,6 +94,7 @@ or `us-east1`. Standard GCS storage costs $0.020/GB/month — negligible for sma
 | [09 - Workspaces](lab-09-workspaces/README.md) | Workspace commands, env patterns | GCP | Associate + Pro |
 | [10 - Testing & HCP Terraform](lab-10-testing-hcp/README.md) | terraform test, HCP Terraform, Sentinel | GCP + HCP | Pro |
 | [11 - Multi-Zone Resilience](lab-11-multi-zone-resilience/README.md) | RTO/RPO, Regional MIG, auto-healing, NLB, state DR | GCP | Pro |
+| [12 - Active-Passive HA](lab-12-active-passive-ha/README.md) | Cloud SQL REGIONAL, Memorystore STANDARD_HA, PSA, failover pattern | GCP | Pro |
 | [Practice Test](practice-test/README.md) | Full exam simulation | — | Associate + Pro |
 
 ## How to Work Through the Labs
@@ -130,3 +133,5 @@ The Professional exam goes deeper on:
 - Sentinel policy as code (lab 10)
 - HCP Terraform collaboration workflows (lab 10)
 - Multi-provider and provider alias patterns (lab 07)
+- Active-passive HA for stateful managed services (lab 12)
+- Declarative vs imperative boundaries in Terraform (lab 12)
