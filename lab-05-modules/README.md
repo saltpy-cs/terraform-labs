@@ -320,6 +320,19 @@ Revert the change:
 network = module.vpc.network_name
 ```
 
+Confirm the revert with a plan:
+
+```bash
+terraform plan
+```
+
+Expected:
+```
+No changes. Your infrastructure matches the configuration.
+```
+
+---
+
 ### Exercise 8 — Registry module pattern
 
 Open `terraform/main.tf` and uncomment the `module "vpc_registry"` block. Run:
