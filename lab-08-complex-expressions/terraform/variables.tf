@@ -73,3 +73,26 @@ variable "allowed_ports" {
   type        = list(string)
   default     = ["22", "80", "443"]
 }
+
+variable "vpc_config" {
+  description = <<-EOT
+    Multi-environment VPC layout. Each entry has a parent CIDR and a list of
+    subnet CIDRs. Used to demonstrate nested structure flattening — a map
+    of objects containing lists cannot be used directly with for_each, so
+    it must first be flattened into a map with unique composite keys.
+  EOT
+  type = map(object({
+    cidr    = string
+    subnets = list(string)
+  }))
+  default = {
+    dev = {
+      cidr    = "10.20.0.0/16"
+      subnets = ["10.20.1.0/24", "10.20.2.0/24"]
+    }
+    prod = {
+      cidr    = "10.30.0.0/16"
+      subnets = ["10.30.1.0/24", "10.30.2.0/24", "10.30.3.0/24"]
+    }
+  }
+}

@@ -19,3 +19,28 @@ output "prod_bucket" {
   description = "Prod GCS bucket name, or 'not created' when enable_production=false"
   value       = var.enable_production ? google_storage_bucket.prod_data[0].name : "not created"
 }
+
+output "all_subnets_flat" {
+  description = "The flattened subnet map produced by local.all_subnets — one entry per subnet across all VPCs"
+  value       = local.all_subnets
+}
+
+output "subnet_names_by_vpc" {
+  description = "Grouped view: map of vpc_name to list of subnet names it owns"
+  value = {
+    for vpc_name in keys(var.vpc_config) :
+      vpc_name => [
+        for k, v in local.all_subnets : k
+        if v.vpc_name == vpc_name
+      ]
+  }
+}
+
+output "env_set_vs_list" {
+  description = "Shows the difference between var.environments (list) and local.env_set (set)"
+  value = {
+    original_list = var.environments
+    as_set        = local.env_set
+    sorted_list   = local.env_list_sorted
+  }
+}

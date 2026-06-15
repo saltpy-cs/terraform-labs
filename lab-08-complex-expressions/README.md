@@ -11,6 +11,9 @@ By the end of this lab you will be able to:
 - Use built-in functions: `join`, `split`, `flatten`, `merge`, `lookup`, `length`, `toset`, `tomap`
 - Compose complex `locals` blocks from these primitives
 - Use `terraform console` to test expressions interactively
+- Understand the difference between `list`, `set`, and `map` types and when to use each
+- Convert between collection types with `toset()`, `tolist()`, and `tomap()`
+- Flatten nested structures (`map(object({ list }))`) into a map suitable for `for_each`
 
 **Estimated cost:** GCE e2-micro instances (~$0.00 for the first under GCP Always Free; < $0.02/hr for additional instances). Destroy promptly after the lab.
 
@@ -162,6 +165,141 @@ locals {
 ```
 
 Define once; reference many times. Inspect them with `terraform console`.
+
+### Collection Types: list, set, and map
+
+Terraform has three collection types that look similar but behave differently.
+Choosing the wrong one is a common source of `for_each` errors.
+
+| Type | Ordered? | Duplicates? | Indexed by | Common use |
+|------|----------|-------------|------------|------------|
+| `list(T)` | Yes | Yes | Integer (`[0]`, `[1]`) | Positional sequences, `count` |
+| `set(T)` | No | No | Value itself | `for_each` keys, deduplication |
+| `map(T)` | No | Keys unique | String key | Named config, `for_each` |
+| `object({...})` | — | — | Named attribute | Structured config with mixed types |
+
+**Why `for_each` requires a set or map, not a list:**
+
+```hcl
+# ERROR — for_each does not accept a list
+resource "google_compute_subnetwork" "bad" {
+  for_each = ["dev", "staging", "prod"]  # list: Terraform refuses this
+}
+
+# CORRECT — convert to set first
+resource "google_compute_subnetwork" "ok" {
+  for_each = toset(["dev", "staging", "prod"])
+}
+```
+
+Lists have integer indices (`[0]`, `[1]`, `[2]`). If you remove `"dev"` from position 0,
+every other element shifts: what was `[1]` is now `[0]`. Terraform would see that as a
+change to every resource. Sets and maps have stable, value-based keys — removing `"dev"`
+only affects the `"dev"` resource.
+
+**Sets have no guaranteed order.** In practice Terraform sorts `set(string)` values
+alphabetically, but this is an implementation detail you should not rely on. If order
+matters, use a list. If stability matters, use a set or map.
+
+**`object` vs `map`:** a `map(T)` requires all values to have the same type `T`. An
+`object({ name = string, count = number })` can have mixed types but the keys are fixed
+at declaration time. Use `object` for structured configuration; use `map` when you need
+a variable number of identically-typed values.
+
+### Type Conversions
+
+`toset()`, `tolist()`, and `tomap()` convert between collection types:
+
+```hcl
+# list → set: removes duplicates, loses position
+toset(["b", "a", "a", "c"])
+# result: {"a", "b", "c"}  (alphabetical, duplicate removed)
+
+# set → list: materialises in (implementation-defined) order
+tolist(toset(["c", "a", "b"]))
+# result: ["a", "b", "c"]  (sorted alphabetically in practice)
+
+# object → map: all values must share a type
+tomap({ dev = "e2-micro", prod = "e2-small" })
+# result: {"dev" = "e2-micro", "prod" = "e2-small"}
+```
+
+`keys(map)` and `values(map)` extract the two sides of a map as lists:
+
+```hcl
+keys(var.instance_config)    # ["dev", "prod", "staging"]
+values({ a = 1, b = 2 })    # [1, 2]
+```
+
+### Flattening Nested Structures
+
+The most important pattern for real-world Terraform: a variable describes a
+hierarchy, but `for_each` needs a flat map with unique string keys.
+
+**The problem:** you have `map(object({ subnets = list(string) }))` — a map of VPCs,
+each containing a list of subnet CIDRs. You cannot use this directly with `for_each`
+because the type is not a flat map.
+
+**The solution — nested `for` + `merge([...]...)`:**
+
+```hcl
+variable "vpc_config" {
+  type = map(object({
+    cidr    = string
+    subnets = list(string)
+  }))
+  default = {
+    dev  = { cidr = "10.20.0.0/16", subnets = ["10.20.1.0/24", "10.20.2.0/24"] }
+    prod = { cidr = "10.30.0.0/16", subnets = ["10.30.1.0/24", "10.30.2.0/24", "10.30.3.0/24"] }
+  }
+}
+
+locals {
+  all_subnets = merge([
+    for vpc_name, vpc in var.vpc_config : {       # outer for: one map per VPC
+      for idx, cidr in vpc.subnets :              # inner for: one entry per subnet
+        "${vpc_name}-subnet-${idx}" => {          # composite key — must be unique
+          vpc_name = vpc_name
+          cidr     = cidr
+          vpc_cidr = vpc.cidr
+        }
+    }
+  ]...)                                           # ... spreads the list into merge()
+}
+```
+
+Step through what this produces:
+
+1. **Outer for** iterates over `vpc_config` — produces a **list of two maps**:
+   ```hcl
+   [
+     { "dev-subnet-0"  = {...}, "dev-subnet-1"  = {...} },
+     { "prod-subnet-0" = {...}, "prod-subnet-1" = {...}, "prod-subnet-2" = {...} }
+   ]
+   ```
+
+2. **`merge([...]...)`** collapses the list of maps into one flat map. The `...`
+   (spread operator) unpacks the list so `merge` receives each map as a separate
+   argument — `merge(map1, map2)` — rather than a single list argument.
+
+3. **Result** — a flat map with five unique keys, ready for `for_each`:
+   ```hcl
+   {
+     "dev-subnet-0"  = { vpc_name = "dev",  cidr = "10.20.1.0/24", ... }
+     "dev-subnet-1"  = { vpc_name = "dev",  cidr = "10.20.2.0/24", ... }
+     "prod-subnet-0" = { vpc_name = "prod", cidr = "10.30.1.0/24", ... }
+     "prod-subnet-1" = { vpc_name = "prod", cidr = "10.30.2.0/24", ... }
+     "prod-subnet-2" = { vpc_name = "prod", cidr = "10.30.3.0/24", ... }
+   }
+   ```
+
+Now `for_each = local.all_subnets` creates one `google_compute_subnetwork` per entry,
+and the key `"prod-subnet-1"` is stable — removing `dev` only destroys the two `dev-*`
+resources, leaving all `prod-*` resources untouched.
+
+**The composite key contract:** keys must be unique across the entire flat map. A
+common convention is `"<parent>-<child>"` or `"<parent>/<child>"`. Choosing a
+meaningful separator helps when reading `terraform state list` output.
 
 ### `terraform console` for Testing
 
@@ -444,7 +582,157 @@ null_resource.debug (local-exec): env_map: {"dev":{...},"prod":{...},"staging":{
 
 This pattern — `local-exec` + `jsonencode()` — is useful for debugging complex locals during development. It prints the value of a local as JSON to stdout during `apply`. Remove it before committing production code.
 
-### Exercise 9 — Destroy
+### Exercise 9 — Sets vs Lists in terraform console
+
+Open `terraform console` (you need to have applied first, or at minimum have a
+`terraform.tfvars` with `gcp_project` set so variables resolve):
+
+```bash
+terraform console
+```
+
+**Part A — Observe set deduplication and ordering:**
+
+```hcl
+# A list preserves duplicates and insertion order
+["staging", "dev", "dev", "prod"]
+
+# toset() removes duplicates and sorts alphabetically
+toset(["staging", "dev", "dev", "prod"])
+
+# Back to a list: note the alphabetical order (sets have no order of their own)
+tolist(toset(["staging", "dev", "dev", "prod"]))
+```
+
+**Part B — Understand why for_each refuses lists:**
+
+```hcl
+# Terraform will tell you directly:
+# Error: Invalid for_each argument — a set or map is required
+
+# Instead, always wrap a list variable in toset():
+toset(var.environments)
+```
+
+**Part C — keys() and values():**
+
+```hcl
+keys(var.instance_config)
+values(var.instance_config)
+
+# Extract just the machine_type from each config object
+{ for k, v in var.instance_config : k => v.machine_type }
+```
+
+**Part D — Type inspection:**
+
+```hcl
+# These look similar but are different types:
+length(["a", "b", "c"])    # list — ordered
+length(toset(["a","b","c"])) # set — unordered
+
+# Object vs map: both are key/value but object has fixed keys, map is dynamic
+{ name = "alice", age = 30 }          # object (mixed types ok)
+tomap({ dev = "t1", prod = "t2" })   # map (all values same type)
+```
+
+Exit the console: `Ctrl+D`
+
+### Exercise 10 — Trace the nested flattening in console
+
+Stay in (or reopen) `terraform console`:
+
+```bash
+terraform console
+```
+
+Trace the `all_subnets` local step by step:
+
+```hcl
+# Step 1: see the raw input — a map of objects, each containing a list
+var.vpc_config
+
+# Step 2: the outer for produces a LIST of maps (one map per VPC)
+[for vpc_name, vpc in var.vpc_config : { for idx, cidr in vpc.subnets : "${vpc_name}-subnet-${idx}" => cidr }]
+
+# Step 3: merge() collapses the list into one flat map — note the ... spread
+merge([for vpc_name, vpc in var.vpc_config : { for idx, cidr in vpc.subnets : "${vpc_name}-subnet-${idx}" => cidr }]...)
+
+# Step 4: the full local (with all fields)
+local.all_subnets
+
+# Step 5: count how many subnets were produced
+length(local.all_subnets)
+
+# Step 6: list just the keys — these become the for_each resource addresses
+keys(local.all_subnets)
+```
+
+Expected from step 6 with defaults:
+```
+tolist([
+  "dev-subnet-0",
+  "dev-subnet-1",
+  "prod-subnet-0",
+  "prod-subnet-1",
+  "prod-subnet-2",
+])
+```
+
+These keys are exactly the suffixes you'll see in `terraform state list`:
+`google_compute_subnetwork.multi["dev-subnet-0"]` etc.
+
+### Exercise 11 — Apply and inspect flattened subnets
+
+```bash
+terraform apply
+```
+
+The apply now includes `google_compute_subnetwork.multi[*]` resources. After apply:
+
+```bash
+# List the flattened subnet resources in state — note the stable composite keys
+terraform state list | grep multi
+
+# Inspect one entry
+terraform state show 'google_compute_subnetwork.multi["prod-subnet-2"]'
+```
+
+Verify the outputs:
+
+```bash
+terraform output all_subnets_flat
+terraform output subnet_names_by_vpc
+terraform output env_set_vs_list
+```
+
+`subnet_names_by_vpc` inverts the structure — it groups the flat map back by VPC name
+using a `for` expression with an `if` filter. Read `outputs.tf` to see how it's built.
+
+**Stability exercise:** add a third environment to `vpc_config`:
+
+```hcl
+# In terraform.tfvars
+vpc_config = {
+  dev     = { cidr = "10.20.0.0/16", subnets = ["10.20.1.0/24", "10.20.2.0/24"] }
+  staging = { cidr = "10.40.0.0/16", subnets = ["10.40.1.0/24"] }
+  prod    = { cidr = "10.30.0.0/16", subnets = ["10.30.1.0/24", "10.30.2.0/24", "10.30.3.0/24"] }
+}
+```
+
+```bash
+terraform plan
+```
+
+The plan should show only **one new resource** (`staging-subnet-0`) being created.
+The existing `dev-*` and `prod-*` resources are unchanged. This is key stability
+property of `for_each` with composite keys — adding entries never disturbs existing ones.
+
+Compare what would happen with a list-based approach: inserting `staging` in the middle
+of a list would shift indices and Terraform would attempt to recreate every subsequent
+subnet.
+
+### Exercise 12 — Destroy
 
 ```bash
 terraform destroy
@@ -475,6 +763,12 @@ No `tf-lab08` entries should appear.
 - Conditional expressions (`condition ? true_val : false_val`) drive feature flags via `count = var.enable_x ? 1 : 0`.
 - Use `terraform console` to test and debug expressions interactively — it evaluates against real state and variable values without modifying anything.
 - `locals` blocks are the right place to compose derived values. Define once; reference many times.
+- `list` preserves order and allows duplicates — use with `count` or when position matters.
+- `set` removes duplicates and has no guaranteed order — use as `for_each` keys when you have a list variable.
+- `map` has unique string keys and no order — the natural source for `for_each`; keys become resource addresses in state.
+- `toset()` is the bridge between list variables and `for_each` — the most common type conversion in Terraform.
+- Nested structures (`map(object({ list }))`) cannot be used directly with `for_each`; flatten them with a nested `for` + `merge([...]...)`.
+- Composite keys (`"${vpc}-subnet-${idx}"`) give `for_each` resources stable, human-readable addresses in state.
 
 ---
 

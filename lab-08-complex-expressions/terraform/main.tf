@@ -135,6 +135,22 @@ resource "google_storage_bucket" "prod_data" {
   })
 }
 
+# ─── Flattened subnets (nested structure demo) ────────────────────────────────
+# local.all_subnets is a flat map built from the nested var.vpc_config.
+# Each key is "<vpc_name>-subnet-<index>"; each value has vpc_name, cidr, vpc_cidr.
+# GCP subnets are free — this demonstrates the flattening pattern at zero cost.
+
+resource "google_compute_subnetwork" "multi" {
+  for_each = local.all_subnets
+
+  name          = "${var.project_name}-${each.key}"
+  ip_cidr_range = each.value.cidr
+  region        = var.gcp_region
+  network       = google_compute_network.main.id
+
+  description = "Flattened from vpc_config.${each.value.vpc_name} (parent CIDR: ${each.value.vpc_cidr})"
+}
+
 # ─── Debug: print env_map during apply ────────────────────────────────────────
 # This null_resource uses a local-exec provisioner to echo local.env_map as JSON.
 # Useful for verifying complex locals during development. Remove in production.
