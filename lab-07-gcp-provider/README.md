@@ -322,7 +322,17 @@ terraform apply -auto-approve
 gcloud storage buckets get-iam-policy $(terraform output -raw us_bucket_url)
 ```
 
-Expected: only the members listed in the `iam_binding` hold `roles/storage.objectAdmin`.
+Expected output:
+```yaml
+bindings:
+- members:
+  - user:you@example.com
+  role: roles/storage.objectAdmin
+etag: BwXxxxxxxxxxx
+version: 1
+```
+
+Notice two things: `roles/storage.objectViewer` is gone (the `iam_member` resource that granted it was removed), and only the members explicitly listed in the `iam_binding` appear under `roles/storage.objectAdmin`. Any other user who previously held that role on this bucket would also have been silently removed — that is what authoritative means.
 
 **Step 3: Restore the original configuration.**
 
