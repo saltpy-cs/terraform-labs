@@ -387,9 +387,26 @@ terraform destroy -auto-approve
 
 ## Cleanup
 
+Before destroying, confirm `terraform/main.tf` has all exercise changes reverted:
+
+- `google_compute_network.main` — `prevent_destroy` lifecycle block should be commented out (Exercise 5)
+- `google_compute_instance.env` — `ignore_changes` line should be uncommented (Exercise 6)
+
+Run `terraform plan` to confirm no config changes are pending, then destroy:
+
 ```bash
-cd terraform
+terraform plan
+# No changes. Your infrastructure matches the configuration.
+
 terraform destroy -auto-approve
 ```
 
-Verify in the GCP Console (Compute Engine) that no instances, networks, or firewall rules remain.
+Verify nothing remains:
+
+```bash
+gcloud compute instances list --filter="name~tf-lab06"
+gcloud compute networks list --filter="name~tf-lab06"
+gcloud compute firewall-rules list --filter="name~tf-lab06" --format=json
+```
+
+All three commands should return no output.
