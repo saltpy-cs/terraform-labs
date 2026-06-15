@@ -235,7 +235,15 @@ terraform state rm 'google_compute_instance.env["staging"]'
 
 ## Exercises
 
-### Exercise 1 — Inspect the dynamic block and add a rule
+### Exercise 1 — Apply
+
+```bash
+terraform apply -auto-approve
+```
+
+This creates the VPC, two environment subnets, one combined firewall rule, 3 count-based instances, and 2 for_each-based instances.
+
+### Exercise 2 — Inspect the dynamic block and add a rule
 
 Open `terraform/main.tf` and find `google_compute_firewall.combined`. Trace how `var.firewall_rules` flows into the `dynamic "allow"` block.
 
@@ -245,21 +253,18 @@ Now open `terraform/variables.tf` and add a fourth rule to the `firewall_rules` 
 { port = "8080", protocol = "tcp", description = "Alt HTTP" },
 ```
 
-Run `terraform plan` (before applying). The plan should show only the firewall rule updating — one new `allow` block is added. No instances or subnets should change.
+Run `terraform plan`. Because the base infrastructure already exists, the plan shows only the firewall rule updating — one new `allow` block is added. No instances or subnets should change.
 
-There is no apply here — the point is to observe how a single variable change maps to one extra `allow` block in the plan. Remove the port 8080 line from `terraform/variables.tf` and confirm the revert — the plan should show three `allow` blocks in the firewall rule, not four:
+Remove the port 8080 line from `terraform/variables.tf` and confirm the revert:
 
 ```bash
 terraform plan
 ```
 
-### Exercise 2 — Apply
-
-```bash
-terraform apply -auto-approve
+Expected:
 ```
-
-This creates the VPC, two environment subnets, one combined firewall rule, 3 count-based instances, and 2 for_each-based instances.
+No changes. Your infrastructure matches the configuration.
+```
 
 ### Exercise 3 — Observe resource addresses in state
 
