@@ -574,7 +574,7 @@ SUFFIX=$(date +%s | tail -c 5)
 MANUAL_BUCKET="tf-lab03-manual-${SUFFIX}"
 echo "Manual bucket name: $MANUAL_BUCKET"
 
-gcloud storage buckets create gs://$MANUAL_BUCKET
+gcloud storage buckets create gs://$MANUAL_BUCKET --project=$(gcloud config get-value project)
 ```
 
 Expected output:
@@ -604,7 +604,7 @@ Terraform proposes to *create* the bucket — it does not know the bucket alread
 **Step 4 (CLI import):** Import the bucket:
 
 ```bash
-terraform import google_storage_bucket.manual tf-lab03-manual-12345
+terraform import -var="gcp_project=YOUR_PROJECT_ID" google_storage_bucket.manual tf-lab03-manual-12345
 ```
 
 Expected output:
