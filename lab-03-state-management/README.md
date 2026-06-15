@@ -461,14 +461,19 @@ This lists every resource address in state. Resource addresses take the form `<t
 terraform state show google_storage_bucket.app_data
 ```
 
-Expected output (abbreviated):
+The GCP provider records every attribute it knows about — expect 30+ fields. A representative subset:
+
 ```
 # google_storage_bucket.app_data:
 resource "google_storage_bucket" "app_data" {
+    force_destroy               = false
     id                          = "tf-lab03-app-dev-xxxx"
     location                    = "US-CENTRAL1"
     name                        = "tf-lab03-app-dev-xxxx"
     project                     = "your-project-id"
+    public_access_prevention    = "inherited"
+    requester_pays              = false
+    rpo                         = "DEFAULT"
     self_link                   = "https://www.googleapis.com/storage/v1/b/tf-lab03-app-dev-xxxx"
     storage_class               = "STANDARD"
     uniform_bucket_level_access = true
@@ -477,10 +482,11 @@ resource "google_storage_bucket" "app_data" {
     versioning {
         enabled = false
     }
+    # ... more nested blocks ...
 }
 ```
 
-This is the full attribute map Terraform has recorded for this resource. Note that this reflects what Terraform *last saw* during an apply or refresh — not necessarily what is in GCP right now. The next exercise demonstrates why that matters.
+This is the full attribute map Terraform has recorded for this resource — every field the provider returned at creation time. Note that this reflects what Terraform *last saw* during an apply or refresh — not necessarily what is in GCP right now. The next exercise demonstrates why that matters.
 
 ---
 
