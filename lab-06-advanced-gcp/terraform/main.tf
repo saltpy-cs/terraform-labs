@@ -38,6 +38,15 @@ resource "google_compute_network" "main" {
   # }
 }
 
+# Subnet for the count-based web instances.
+resource "google_compute_subnetwork" "web" {
+  name          = "${var.project_name}-web-subnet"
+  project       = var.gcp_project
+  region        = var.gcp_region
+  network       = google_compute_network.main.id
+  ip_cidr_range = var.web_subnet_cidr
+}
+
 # Subnets for the for_each-based instances — one per environment.
 # for_each iterates over var.environments so each environment gets its own subnet.
 resource "google_compute_subnetwork" "env" {
@@ -118,7 +127,7 @@ resource "google_compute_instance" "web" {
   }
 
   network_interface {
-    network = google_compute_network.main.id
+    subnetwork = google_compute_subnetwork.web.self_link
 
     # Assign an ephemeral external IP.
     access_config {}

@@ -21,6 +21,12 @@ variable "project_name" {
   default     = "tf-lab06"
 }
 
+variable "web_subnet_cidr" {
+  description = "CIDR range for the subnet used by count-based web instances."
+  type        = string
+  default     = "10.0.0.0/24"
+}
+
 variable "instance_count" {
   description = "Number of identical GCE instances to create with count. Must be between 1 and 5."
   type        = number
