@@ -424,9 +424,10 @@ Expected:
 ```
 google_storage_bucket.europe
 google_storage_bucket.us
+google_storage_bucket_iam_binding.user_binding
 ```
 
-Both are managed by the `google` provider, but the alias distinguishes which provider instance manages which resource. You can verify by pulling the raw state entry:
+The IAM binding also matches because its resource type contains the word "bucket". Both `google_storage_bucket` resources are managed by the `google` provider, but the alias distinguishes which provider instance manages which resource. You can verify by pulling the raw state entry:
 
 ```bash
 terraform show -json | jq '.values.root_module.resources[] | select(.address | contains("europe"))'
