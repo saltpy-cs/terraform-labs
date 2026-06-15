@@ -640,6 +640,14 @@ terraform plan -var="gcp_project=YOUR_PROJECT_ID"
 
 Update your resource block until the plan shows no changes.
 
+**Step 6:** Clean up — destroy the manual bucket and restore `main.tf`:
+
+```bash
+terraform destroy -target=google_storage_bucket.manual -auto-approve -var="gcp_project=YOUR_PROJECT_ID"
+```
+
+Then remove the `google_storage_bucket.manual` block you added in Step 2 from `main.tf`. This restores the file to its original state before Exercise 12.
+
 ---
 
 ### Exercise 12: Cleanup
