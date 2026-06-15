@@ -377,9 +377,9 @@ terraform apply -auto-approve
 
 ---
 
-### Exercise 9: Forced replacement (`-/+`) — change machine_type
+### Exercise 9: Stop-and-update (`~`) — change machine_type
 
-Changing `machine_type` on a running GCE instance requires the VM to be stopped and recreated with the new type. Terraform expresses this as a destroy-then-recreate.
+Changing `machine_type` requires GCP to stop the VM, change the type, and restart it. With the google provider v6+, Terraform handles this as an in-place update (`~`) rather than a destroy-then-recreate — the resource is not replaced, but there is downtime while the VM cycles.
 
 In `main.tf`, change `machine_type`:
 
@@ -398,13 +398,15 @@ terraform plan
 
 Expected output (abbreviated):
 ```
-  -/+ resource "google_compute_instance" "main" (must be replaced)
-      ~ machine_type = "e2-micro" -> "e2-small" # forces replacement
+  ~ resource "google_compute_instance" "main" {
+      ~ machine_type = "e2-micro" -> "e2-small"
 
-Plan: 1 to add, 0 to change, 1 to destroy.
+Plan: 0 to add, 1 to change, 0 to destroy.
 ```
 
-The `-/+` and "must be replaced" indicate Terraform will destroy the existing instance and create a new one. In a real environment this means downtime, and the external IP address will change (unless you have a reserved static IP).
+The `~` indicates an in-place update. Unlike the tag change in Exercise 8, this one requires a VM stop/start — the external IP is preserved because the resource is not recreated, but the instance is unavailable for 30–60 seconds during the change.
+
+Examples of changes that do force full replacement (`-/+`) in the GCP provider: changing the instance `name`, modifying `boot_disk` image, or changing `zone`.
 
 **Do not apply this change.** Restore `machine_type = "e2-micro"` and verify the plan shows no changes:
 
