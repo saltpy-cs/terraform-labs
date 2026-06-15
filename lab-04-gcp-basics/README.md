@@ -413,7 +413,7 @@ terraform plan
 # No changes. Your infrastructure matches the configuration.
 ```
 
-**Part 2 — forced replacement (`-/+`):** Now change the instance name:
+**Part 2 — forced replacement (`-/+`):** Now change the instance name. The current value is `"${var.project_name}-instance"` — replace it with a hardcoded string:
 
 ```hcl
 resource "google_compute_instance" "main" {
