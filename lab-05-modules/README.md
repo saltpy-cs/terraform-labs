@@ -404,7 +404,7 @@ Verify nothing remains:
 ```bash
 gcloud compute instances list --filter="name~tf-lab05"
 gcloud compute networks list --filter="name~tf-lab05"
-gcloud compute firewall-rules list --filter="name~tf-lab05"
+gcloud compute firewall-rules list --filter="name~tf-lab05" --format=json
 ```
 
 All three commands should return no output.
