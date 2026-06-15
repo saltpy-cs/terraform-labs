@@ -313,7 +313,7 @@ subnet_id            = "projects/your-project/regions/us-central1/subnetworks/..
 
 ### Exercise 7: SSH to the instance
 
-GCP provides a managed SSH mechanism via `gcloud compute ssh`. It automatically generates an SSH key pair and injects the public key into the instance's metadata — no key pair resource is needed in your Terraform configuration.
+GCP provides a managed SSH mechanism via `gcloud compute ssh`. On first use it generates an SSH key pair at `~/.ssh/google_compute_engine` and injects the public key into the instance's metadata — no key pair resource is needed in your Terraform configuration.
 
 ```bash
 gcloud compute ssh tf-lab04-instance --zone us-central1-a
@@ -321,11 +321,11 @@ gcloud compute ssh tf-lab04-instance --zone us-central1-a
 
 Type `exit` to leave the SSH session.
 
-You can also SSH manually using the external IP from the Terraform output:
+You can also SSH manually using the external IP from the Terraform output. **Run `gcloud compute ssh` above first** — it creates `~/.ssh/google_compute_engine` and injects the key. The username must match your local account name (not `debian`), because that is the username `gcloud compute ssh` registers the key under:
 
 ```bash
 INSTANCE_IP=$(terraform output -raw instance_external_ip)
-ssh -i ~/.ssh/google_compute_engine debian@$INSTANCE_IP
+ssh -i ~/.ssh/google_compute_engine $USER@$INSTANCE_IP
 ```
 
 If the connection is refused, verify that `my_ip_cidr` in `terraform.tfvars` matches your current public IP (`curl ifconfig.me`). Your ISP may have assigned you a different IP since you set the variable.
