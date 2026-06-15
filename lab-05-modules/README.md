@@ -341,7 +341,19 @@ Open `terraform/main.tf` and uncomment the `module "vpc_registry"` block. Run:
 terraform init
 ```
 
-Observe the new download step in the output — Terraform fetches the module from `registry.terraform.io`. Run `terraform plan` to see the additional resources the public module would create. **Do not apply.** Comment the block back out, then run `terraform init` again.
+Observe the new download step in the output — Terraform fetches the module from `registry.terraform.io`. Run `terraform plan` to see the additional resources the public module would create.
+
+You will see a deprecation warning about a `fingerprint` attribute in the registry module's subnet outputs:
+
+```
+Warning: Deprecated value used
+  on .terraform/modules/vpc_registry/modules/subnets/outputs.tf line 18
+  Deprecated resource attribute "fingerprint" used.
+```
+
+This comes from inside the public module itself — the Google provider v6 deprecated the `fingerprint` attribute on subnets but the registry module has not been updated yet. It is a warning, not an error, and does not affect the plan. It illustrates a real-world tradeoff of using public registry modules: you take on a dependency on the module author's update cadence.
+
+**Do not apply.** Comment the block back out, then run `terraform init` again.
 
 ### Exercise 9 — Destroy
 
