@@ -245,7 +245,9 @@ Now open `terraform/variables.tf` and add a fourth rule to the `firewall_rules` 
 { port = "8080", protocol = "tcp", description = "Alt HTTP" },
 ```
 
-Run `terraform plan` (before applying). The plan should show only the firewall rule updating — one new `allow` block is added. No instances or subnets should change. Revert the change before continuing.
+Run `terraform plan` (before applying). The plan should show only the firewall rule updating — one new `allow` block is added. No instances or subnets should change.
+
+There is no apply here — the point is to observe how a single variable change maps to one extra `allow` block in the plan. Revert the change before continuing so that Exercise 2 applies the default configuration as written.
 
 ### Exercise 2 — Apply
 
