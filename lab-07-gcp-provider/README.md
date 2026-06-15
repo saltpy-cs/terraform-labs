@@ -196,15 +196,11 @@ Terraform has been successfully initialized!
 terraform plan
 ```
 
-Review the plan output. Identify which resources use the aliased `google.europe` provider vs the default. Look for lines like:
+Review the plan output. The `provider` meta-argument is not shown as an attribute in plan output — Terraform uses it internally for routing but does not print it. The way to identify which provider a resource uses is to read the configuration: look for `provider = google.europe` in the resource block in `main.tf`.
 
-```
-# google_storage_bucket.europe will be created
-  + resource "google_storage_bucket" "europe" {
-      + provider = "google.europe"
-```
+In the plan, confirm `google_storage_bucket.europe` appears alongside the other resources. After apply, Exercise 9 shows how to verify the provider assignment via state.
 
-Count how many resources use the default provider vs the aliased one. Only `google_storage_bucket.europe` uses `google.europe`.
+Count how many resources the plan will create — only `google_storage_bucket.europe` uses the aliased `google.europe` provider.
 
 ### Exercise 3 — Apply
 
