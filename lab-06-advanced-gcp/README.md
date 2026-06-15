@@ -225,6 +225,12 @@ terraform state rm 'google_compute_instance.env["staging"]'
    gcp_project = "YOUR-PROJECT-ID"
    ```
 
+3. Initialise Terraform:
+   ```bash
+   cd terraform
+   terraform init
+   ```
+
 ---
 
 ## Exercises
@@ -244,8 +250,6 @@ Run `terraform plan` (before applying). The plan should show only the firewall r
 ### Exercise 2 — Apply
 
 ```bash
-cd terraform
-terraform init
 terraform apply -auto-approve
 ```
 
