@@ -298,6 +298,23 @@ description = ""
 
 Run `terraform plan`. The plan should show **no changes** because you are passing an empty string that matches the current resource state. This demonstrates the clean extension pattern: new optional inputs can be added to a module without forcing callers to update or causing resource recreation.
 
+Revert all three file changes before continuing:
+
+- Remove the `description` variable from `terraform/modules/vpc/variables.tf`
+- Comment the `description` line back out in `terraform/modules/vpc/main.tf`
+- Remove `description = ""` from the `module "vpc"` block in `terraform/main.tf`
+
+Confirm with a plan:
+
+```bash
+terraform plan
+```
+
+Expected:
+```
+No changes. Your infrastructure matches the configuration.
+```
+
 ### Exercise 7 — Encapsulation (expected failure)
 
 Edit `terraform/main.tf` temporarily. In `google_compute_firewall.allow_ssh`, change the `network` argument to reference the internal resource directly:
@@ -360,8 +377,6 @@ This comes from inside the public module itself — the Google provider v6 depre
 ```bash
 terraform destroy -auto-approve
 ```
-
-Confirm with `yes`.
 
 ---
 
