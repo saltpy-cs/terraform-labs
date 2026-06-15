@@ -266,7 +266,7 @@ Expected output (abbreviated):
 {
     "version": 4,
     "terraform_version": "1.x.x",
-    "serial": 1,
+    "serial": 3,
     "lineage": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
     "outputs": {
         "bucket_name": {
@@ -294,7 +294,7 @@ Expected output (abbreviated):
 ```
 
 Notice:
-- `serial` is 1 — this is the first write to state
+- `serial` will be a small number but likely higher than 1 — the GCP provider performs a refresh pass after resource creation, each of which increments the serial. The exact value is not important; what matters is that it increments on every write and Terraform uses it to detect conflicting concurrent applies.
 - `lineage` is a UUID assigned at `terraform init` time — it uniquely identifies this state chain
 - The `resources` array contains every attribute of every managed resource
 
