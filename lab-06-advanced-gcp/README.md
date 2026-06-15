@@ -372,8 +372,6 @@ Run `terraform plan`. Now Terraform wants to remove the `startup-time` metadata 
 terraform destroy -auto-approve
 ```
 
-Confirm with `yes`.
-
 ---
 
 ## Key Takeaways
