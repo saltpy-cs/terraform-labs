@@ -128,6 +128,12 @@ or `us-east1`. Standard GCS storage costs $0.020/GB/month — negligible for sma
 
 **Always run `terraform destroy` at the end of each lab.**
 
+To check your billing account status and get a direct link to the spend report at any time:
+
+```bash
+./gcp-costs.sh
+```
+
 ## Lab Overview
 
 | Lab | Topic | Providers | Cert Alignment |
