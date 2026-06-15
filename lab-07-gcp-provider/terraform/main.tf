@@ -76,10 +76,15 @@ resource "google_storage_bucket" "europe" {
 # project-level IAM when possible — it follows least-privilege more closely.
 # Here we grant var.your_user_email Storage Object Viewer on the US bucket only.
 
-resource "google_storage_bucket_iam_member" "user_access" {
-  bucket = google_storage_bucket.us.name
-  role   = "roles/storage.objectViewer"
-  member = "user:${var.your_user_email}"
+# resource "google_storage_bucket_iam_member" "user_access" {
+#   bucket = google_storage_bucket.us.name
+#   role   = "roles/storage.objectViewer"
+#   member = "user:${var.your_user_email}"
+# }
+resource "google_storage_bucket_iam_binding" "user_binding" {
+  bucket  = google_storage_bucket.us.name
+  role    = "roles/storage.objectAdmin"
+  members = ["user:${var.your_user_email}"]
 }
 
 # ─── Service Account Key ──────────────────────────────────────────────────────
@@ -178,5 +183,5 @@ resource "google_compute_instance" "app" {
 # Note: only works when Terraform has outbound internet access.
 
 data "http" "metadata" {
-  url = "https://ifconfig.me"
+  url = "https://ifconfig.me/ip"
 }
