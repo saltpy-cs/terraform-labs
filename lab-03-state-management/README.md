@@ -379,14 +379,7 @@ app_bucket_url  = "gs://tf-lab03-app-dev-xxxx"
 
 ### Exercise 5: Verify state is stored in GCS
 
-```bash
-gcloud storage ls gs://<your-state-bucket-name>/
-```
-
-Expected output:
-```
-gs://tf-lab03-tfstate-a1b2c3d4/lab03/
-```
+`gcloud storage ls` only lists actual objects at a given path, not simulated subdirectory prefixes. Navigate directly to the known path where Terraform writes state:
 
 ```bash
 gcloud storage ls gs://<your-state-bucket-name>/lab03/app/
@@ -395,6 +388,12 @@ gcloud storage ls gs://<your-state-bucket-name>/lab03/app/
 Expected output:
 ```
 gs://tf-lab03-tfstate-a1b2c3d4/lab03/app/default.tfstate
+```
+
+If you want to see everything in the bucket recursively:
+
+```bash
+gcloud storage ls --recursive gs://<your-state-bucket-name>/
 ```
 
 Download and read the state file directly:
