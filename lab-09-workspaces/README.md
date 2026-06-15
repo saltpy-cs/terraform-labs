@@ -7,11 +7,11 @@ By the end of this lab you will be able to:
 - Create, list, select, and delete Terraform workspaces
 - Use `terraform.workspace` to branch configuration per environment
 - Configure per-workspace resource sizing and naming using `lookup()`
-- Understand how workspaces isolate state within a single backend
+- Understand how workspaces isolate state within a single GCS backend
 - Know when workspaces are the right tool and when to use separate root modules
-- Configure an S3 backend with automatic workspace state path separation
+- Verify GCS workspace state paths and understand how they differ from S3
 
-**Estimated cost:** One EC2 t3.nano per active workspace (~$0.0052/hr each). Running dev + staging simultaneously costs ~$0.01/hr. Destroy all workspaces promptly.
+**Estimated cost:** One GCE e2-micro per active workspace. The first e2-micro is free tier eligible; additional ones cost under $0.01/hr. Destroy all workspaces promptly.
 
 ---
 
@@ -23,16 +23,34 @@ A Terraform workspace is a **named state snapshot** within a single backend. Eve
 
 The key insight: **the code is shared, the state is isolated.** You deploy the same configuration multiple times, each to a separate state file, allowing you to have dev/staging/prod environments from a single set of `.tf` files.
 
+### GCS Backend Workspace State Paths
+
+The GCS backend stores workspace state under `<prefix>/<workspace>/default.tfstate`. This differs from the S3 backend, which uses `env:/<workspace>/<key>`.
+
 ```
-backend bucket
-├── terraform.tfstate          ← default workspace state
-└── env:/
-    ├── dev/
-    │   └── terraform.tfstate  ← dev workspace state
-    ├── staging/
-    │   └── terraform.tfstate  ← staging workspace state
-    └── prod/
-        └── terraform.tfstate  ← prod workspace state
+gs://your-bucket/lab09/
+├── default/
+│   └── default.tfstate    ← default workspace state
+├── dev/
+│   └── default.tfstate    ← dev workspace state
+├── staging/
+│   └── default.tfstate    ← staging workspace state
+└── prod/
+    └── default.tfstate    ← prod workspace state
+```
+
+You configure the backend once with a `prefix`; Terraform handles the path routing automatically:
+
+```hcl
+backend "gcs" {
+  bucket = "my-state-bucket"
+  prefix = "lab09"
+}
+```
+
+Verify the paths after applying multiple workspaces:
+```bash
+gsutil ls gs://my-state-bucket/lab09/
 ```
 
 ### The `terraform.workspace` Built-in
@@ -44,10 +62,10 @@ locals {
   env = terraform.workspace == "default" ? "dev" : terraform.workspace
 }
 
-resource "aws_instance" "web" {
-  tags = {
-    Name        = "${var.project_name}-${local.env}"
-    Environment = local.env
+resource "google_compute_instance" "app" {
+  labels = {
+    environment = local.env
+    workspace   = terraform.workspace
   }
 }
 ```
@@ -60,16 +78,16 @@ A common pattern is to treat the `default` workspace as equivalent to `dev`, sin
 
 ```hcl
 locals {
-  instance_types = {
-    dev     = "t3.nano"
-    staging = "t3.nano"
-    prod    = "t3.small"
+  machine_types = {
+    dev     = "e2-micro"
+    staging = "e2-micro"
+    prod    = "e2-small"
   }
-  instance_type = lookup(local.instance_types, terraform.workspace, "t3.nano")
+  machine_type = lookup(local.machine_types, local.env, "e2-micro")
 }
 ```
 
-When the workspace is `prod`, `instance_type = "t3.small"`. For any other workspace (including `default`), it falls back to `"t3.nano"`.
+When the workspace maps to `prod`, `machine_type = "e2-small"`. For any other workspace (including `default`), it falls back to `"e2-micro"`.
 
 ### Workspace Commands
 
@@ -89,32 +107,8 @@ terraform workspace select staging
 # Delete a workspace (must not be the current workspace; state must be empty or use -force)
 terraform workspace delete staging
 
-# Delete even if state is non-empty (use with caution!)
+# Delete even if state is non-empty (use with caution)
 terraform workspace delete -force staging
-```
-
-### S3 Backend with Workspace State Paths
-
-When using the S3 backend, Terraform automatically manages workspace state paths:
-
-- `default` workspace: `s3://bucket/<key>` (the `key` in your backend config)
-- Other workspaces: `s3://bucket/env:/<workspace>/<key>`
-
-You configure the backend once; Terraform handles the path routing automatically:
-
-```hcl
-terraform {
-  backend "s3" {
-    bucket = "my-state-bucket"
-    key    = "lab09/terraform.tfstate"
-    region = "us-east-1"
-  }
-}
-```
-
-Verify the paths after applying multiple workspaces:
-```bash
-aws s3 ls s3://my-state-bucket/env:/ --recursive
 ```
 
 ### When to Use Workspaces
@@ -128,17 +122,17 @@ aws s3 ls s3://my-state-bucket/env:/ --recursive
 **Poor fits for workspaces:**
 - Different teams with different IAM permissions per environment
 - Large infrastructure that diverges significantly between environments
-- Compliance requirements for strict account-level isolation
+- Compliance requirements for strict project-level isolation
 - When you need different backend configurations per environment
 
-For production systems with isolation requirements, use **separate root modules** with separate state files and separate AWS accounts. Each environment is a completely independent Terraform configuration that happens to share modules.
+For production systems with isolation requirements, use **separate root modules** with separate state files and separate GCP projects. Each environment is a completely independent Terraform configuration that happens to share modules.
 
 ### Workspace Limitations
 
-1. **Shared backend, shared permissions** — all workspaces use the same S3 bucket and DynamoDB table. You cannot grant prod-only IAM permissions to the prod workspace.
+1. **Shared backend, shared permissions** — all workspaces use the same GCS bucket. You cannot grant prod-only IAM permissions to the prod workspace.
 2. **Same code** — significant divergence between environments requires branching the codebase, which defeats the purpose.
 3. **`default` workspace cannot be deleted** — treat it as your baseline.
-4. **No workspace-specific provider configuration** — all workspaces use the same provider credentials.
+4. **No workspace-specific provider configuration** — all workspaces use the same GCP project and credentials.
 
 ---
 
@@ -147,19 +141,9 @@ For production systems with isolation requirements, use **separate root modules*
 ### Prerequisites
 
 - Terraform >= 1.6 installed
-- AWS CLI configured with permissions to create EC2, VPC, and S3 resources
-- An S3 bucket for Terraform state (see Exercise 1)
-
-### Create a State Bucket
-
-Either reuse the state bucket from Lab 03, or create a new one:
-
-```bash
-aws s3 mb s3://tf-lab09-state-$(whoami) --region us-east-1
-aws s3api put-bucket-versioning \
-  --bucket tf-lab09-state-$(whoami) \
-  --versioning-configuration Status=Enabled
-```
+- `gcloud` CLI authenticated (`gcloud auth application-default login`)
+- A GCP project with the Compute Engine API enabled
+- A GCS bucket for Terraform state (see Exercise 1)
 
 ### Configure Variables
 
@@ -168,38 +152,38 @@ cd lab-09-workspaces/terraform
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `terraform.tfvars` and set `state_bucket` to your bucket name.
+Edit `terraform.tfvars` and set `gcp_project` and `state_bucket` to your values.
 
 ### Configure the Backend
 
-Edit the `backend "s3"` block in `main.tf`. Replace `YOUR_STATE_BUCKET_NAME` with your actual bucket name.
+Edit the `backend "gcs"` block in `main.tf`. Replace `YOUR_STATE_BUCKET_NAME` with your actual bucket name.
 
 ---
 
 ## Exercises
 
-### Exercise 1 — Create a State Bucket
+### Exercise 1 — Create a GCS State Bucket
 
 ```bash
-STATE_BUCKET="tf-lab09-state-$(whoami)"
-aws s3 mb s3://${STATE_BUCKET} --region us-east-1
-aws s3api put-bucket-versioning \
-  --bucket ${STATE_BUCKET} \
-  --versioning-configuration Status=Enabled
+STATE_BUCKET="tf-lab09-state-$(gcloud config get-value project)"
+gsutil mb -l us-central1 gs://${STATE_BUCKET}
+gsutil versioning set on gs://${STATE_BUCKET}
 ```
 
 Expected:
 ```
-make_bucket: tf-lab09-state-yourname
+Creating gs://tf-lab09-state-your-project-id/...
+Enabling versioning for gs://tf-lab09-state-your-project-id/...
 ```
 
-### Exercise 2 — Configure the Backend
+### Exercise 2 — Configure the Backend and Initialise
 
-Edit `terraform/main.tf`. In the `backend "s3"` block, replace `YOUR_STATE_BUCKET_NAME` with your actual bucket name (e.g. `tf-lab09-state-yourname`).
+Edit `terraform/main.tf`. In the `backend "gcs"` block, replace `YOUR_STATE_BUCKET_NAME` with your actual bucket name (e.g. `tf-lab09-state-your-project-id`).
 
-Also set `state_bucket` in `terraform.tfvars`:
+Also update `terraform.tfvars`:
 ```hcl
-state_bucket = "tf-lab09-state-yourname"
+gcp_project  = "your-gcp-project-id"
+state_bucket = "tf-lab09-state-your-project-id"
 ```
 
 Initialise:
@@ -210,7 +194,7 @@ terraform init
 Expected:
 ```
 Initializing the backend...
-Successfully configured the backend "s3"!
+Successfully configured the backend "gcs"!
 Terraform has been successfully initialized!
 ```
 
@@ -270,49 +254,68 @@ Type `yes`. Expected output includes:
 ```
 Outputs:
 
-workspace            = "dev"
-instance_type_used   = "t3.nano"
-environment_summary  = {
-  "environment"   = "dev"
-  "instance_id"   = "i-0abc..."
-  "instance_type" = "t3.nano"
-  "workspace"     = "dev"
+workspace          = "dev"
+machine_type_used  = "e2-micro"
+instance_name      = "tf-lab09-dev-instance"
+environment_summary = {
+  "instance"     = "tf-lab09-dev-instance"
+  "machine_type" = "e2-micro"
+  "workspace"    = "dev"
 }
 ```
 
-Notice `instance_type_used = "t3.nano"` — the `lookup()` matched `dev`.
+Notice `machine_type_used = "e2-micro"` — the `lookup()` matched `dev`.
 
-### Exercise 6 — Create and Apply Staging Workspace
+### Exercise 6 — Inspect the Environment Summary Output
+
+```bash
+terraform output environment_summary
+```
+
+Observe the map output showing all three values together. The `workspace` key shows the raw workspace name; `machine_type` shows what `lookup()` resolved it to.
+
+### Exercise 7 — Create and Apply Staging Workspace
 
 ```bash
 terraform workspace new staging
 terraform apply
 ```
 
-Type `yes`. Expected:
+Type `yes`. Expected output includes:
 ```
-workspace            = "staging"
-instance_type_used   = "t3.nano"
+workspace          = "staging"
+machine_type_used  = "e2-micro"
+instance_name      = "tf-lab09-staging-instance"
 ```
 
-Note: a new EC2 instance was created. The dev instance still exists — these are completely independent state files.
+Note: a new GCE instance was created. The dev instance still exists — these are completely independent state files.
 
-### Exercise 7 — Verify Separate State Files in S3
+### Exercise 8 — Verify GCS State Paths
 
 ```bash
-STATE_BUCKET="tf-lab09-state-$(whoami)"
-aws s3 ls s3://${STATE_BUCKET}/ --recursive
+STATE_BUCKET="tf-lab09-state-$(gcloud config get-value project)"
+gsutil ls gs://${STATE_BUCKET}/lab09/
 ```
 
-Expected output (note the `env:/` prefix for non-default workspaces):
+Expected output (note the workspace-named subdirectories):
 ```
-2024-xx-xx xx:xx:xx  ....  env:/dev/lab09/terraform.tfstate
-2024-xx-xx xx:xx:xx  ....  env:/staging/lab09/terraform.tfstate
+gs://tf-lab09-state-your-project-id/lab09/dev/
+gs://tf-lab09-state-your-project-id/lab09/staging/
 ```
 
-The `default` workspace state would be at `lab09/terraform.tfstate` (no `env:/` prefix).
+Drill into a workspace directory:
+```bash
+gsutil ls gs://${STATE_BUCKET}/lab09/dev/
+```
 
-### Exercise 8 — State Isolation Demo
+Expected:
+```
+gs://tf-lab09-state-your-project-id/lab09/dev/default.tfstate
+```
+
+This is the GCS path pattern: `<prefix>/<workspace>/default.tfstate`. Compare this to the S3 backend which uses `env:/<workspace>/<key>`.
+
+### Exercise 9 — State Isolation Demo
 
 Switch to dev and list resources:
 ```bash
@@ -328,13 +331,13 @@ terraform workspace select staging
 terraform state list
 ```
 
-Expected: only staging resources — the dev resources are not visible.
+Expected: only staging resources — the dev resources are not visible from here.
 
-This demonstrates that `terraform state list` only shows the current workspace's state.
+This demonstrates that `terraform state list` operates only on the current workspace's state file.
 
-### Exercise 9 — Instance Type Variation
+### Exercise 10 — Machine Type Variation
 
-Switch to a new `prod` workspace and run a plan:
+Create a `prod` workspace and run a plan:
 ```bash
 terraform workspace new prod
 terraform plan
@@ -342,24 +345,24 @@ terraform plan
 
 Observe in the plan output:
 ```
-+ instance_type = "t3.small"
++ machine_type = "e2-small"
 ```
 
-The `lookup()` in `locals` matched `prod` → `t3.small`. The dev and staging instances use `t3.nano`.
+The `lookup()` in `locals` matched `prod` → `e2-small`. The dev and staging instances use `e2-micro`.
 
-**Do not apply in the prod workspace** unless you are comfortable with the t3.small cost (~$0.0208/hr). Run `terraform destroy` immediately if you do apply.
+**Do not apply in the prod workspace** unless you are comfortable with the e2-small cost. If you do apply, run `terraform destroy` immediately after observing the output.
 
-If you want to observe the t3.small selection without incurring cost:
+To observe the machine type selection without incurring cost:
 ```bash
-terraform plan | grep instance_type
+terraform plan | grep machine_type
 ```
 
 Expected:
 ```
-+ instance_type = "t3.small"
++ machine_type = "e2-small"
 ```
 
-### Exercise 10 — Selective Destroy (Staging Only)
+### Exercise 11 — Selective Destroy (Staging Only)
 
 Switch to staging and destroy:
 ```bash
@@ -377,27 +380,25 @@ terraform state list
 
 Expected: dev resources still listed. Only staging was destroyed.
 
-### Exercise 11 — Delete Workspaces and Full Cleanup
+### Exercise 12 — Delete Workspaces and Full Cleanup
 
-**Destroy all remaining workspaces:**
+Destroy all remaining workspaces:
 
 ```bash
-# Destroy staging (already done in Exercise 10)
 # Destroy prod (if you applied it)
 terraform workspace select prod
-terraform destroy  # if you applied prod
+terraform destroy  # only if prod was applied
 
 # Destroy dev
 terraform workspace select dev
 terraform destroy
 
-# Switch back to default and destroy (if anything was applied there)
+# Switch back to default (staging was already destroyed in Exercise 11)
 terraform workspace select default
 ```
 
-**Delete the empty workspaces:**
+Delete the now-empty workspaces (you must not be in the workspace you are deleting):
 ```bash
-# You cannot delete the current workspace, so switch to default first
 terraform workspace select default
 terraform workspace delete dev
 terraform workspace delete staging
@@ -409,7 +410,7 @@ Expected:
 Deleted workspace "dev"!
 ```
 
-Verify:
+Verify only `default` remains:
 ```bash
 terraform workspace list
 ```
@@ -424,10 +425,10 @@ Expected:
 ## Key Takeaways
 
 - **Workspaces provide state isolation within a single backend.** Same code, different state files — one per workspace.
-- **`terraform.workspace`** is a built-in string value containing the current workspace name. Use it in `locals` and resource tags.
-- **`lookup()` enables per-workspace configuration** — different instance types, sizes, or counts without duplicating code.
-- **S3 workspace state paths** follow the pattern `env:/<workspace>/<key>`. Terraform manages this routing automatically.
-- **Workspace isolation is state-level only** — all workspaces share the same backend credentials and provider configuration. For permission isolation, use separate AWS accounts and backends.
+- **`terraform.workspace`** is a built-in string value containing the current workspace name. Use it in `locals`, labels, and resource names.
+- **`lookup()` enables per-workspace configuration** — different machine types, sizes, or counts without duplicating code.
+- **GCS workspace state paths** follow the pattern `<prefix>/<workspace>/default.tfstate`. This differs from S3's `env:/<workspace>/<key>` pattern. Terraform manages the routing automatically.
+- **Workspace isolation is state-level only** — all workspaces share the same GCS bucket and GCP project credentials. For permission isolation, use separate GCP projects and backends.
 - **The `default` workspace cannot be deleted.** Treat it as a baseline or development environment.
 - **Use separate root modules** (not workspaces) when environments have significantly different infrastructure, different teams, or compliance isolation requirements.
 
@@ -443,11 +444,10 @@ for ws in dev staging prod; do
   terraform workspace delete $ws 2>/dev/null
 done
 
-# Destroy default workspace resources
+# Destroy default workspace resources (if anything was applied there)
 terraform workspace select default
-terraform destroy
+terraform destroy -auto-approve
 
 # Optionally delete the state bucket (this is permanent)
-# aws s3 rm s3://tf-lab09-state-$(whoami) --recursive
-# aws s3 rb s3://tf-lab09-state-$(whoami)
+# gsutil rm -r gs://tf-lab09-state-$(gcloud config get-value project)
 ```

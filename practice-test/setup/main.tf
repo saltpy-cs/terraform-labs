@@ -2,120 +2,108 @@ terraform {
   required_version = ">= 1.6"
 
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 6.0"
     }
     random = {
       source  = "hashicorp/random"
-      version = ">= 3.0"
+      version = "~> 3.0"
     }
     local = {
       source  = "hashicorp/local"
-      version = ">= 2.0"
+      version = "~> 2.0"
     }
     null = {
       source  = "hashicorp/null"
-      version = ">= 3.0"
+      version = "~> 3.0"
     }
   }
 }
 
-provider "aws" {
-  region = "us-east-1"
+# ---------------------------------------------------------------------------
+# Variables
+# ---------------------------------------------------------------------------
+
+variable "gcp_project" {
+  type        = string
+  description = "The GCP project ID to provision resources in."
+}
+
+variable "gcp_region" {
+  type        = string
+  description = "The GCP region for regional resources."
+  default     = "us-central1"
 }
 
 # ---------------------------------------------------------------------------
-# Random suffixes — keeps bucket names globally unique
+# Provider
 # ---------------------------------------------------------------------------
 
-resource "random_id" "state_bucket" {
+provider "google" {
+  project = var.gcp_project
+  region  = var.gcp_region
+}
+
+# ---------------------------------------------------------------------------
+# Random suffix — keeps bucket names globally unique
+# ---------------------------------------------------------------------------
+
+resource "random_id" "suffix" {
   byte_length = 4
 }
 
-resource "random_id" "import_bucket" {
-  byte_length = 4
-}
-
 # ---------------------------------------------------------------------------
-# S3 bucket for remote state backend (Q3)
+# GCS bucket for remote state backend (Q3)
 # ---------------------------------------------------------------------------
 
-resource "aws_s3_bucket" "state" {
-  bucket        = "tf-practice-state-${random_id.state_bucket.hex}"
+resource "google_storage_bucket" "practice_state" {
+  name          = "tf-practice-state-${random_id.suffix.hex}"
+  location      = "US-CENTRAL1"
+  project       = var.gcp_project
   force_destroy = true
 
-  tags = {
-    Purpose = "TerraformPracticeTest"
-    Role    = "state-backend"
+  versioning {
+    enabled = true
   }
-}
 
-resource "aws_s3_bucket_versioning" "state" {
-  bucket = aws_s3_bucket.state.id
-
-  versioning_configuration {
-    status = "Enabled"
+  labels = {
+    purpose = "terraform-practice-test"
+    role    = "state-backend"
   }
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
-  bucket = aws_s3_bucket.state.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
-    }
-  }
-}
-
-resource "aws_s3_bucket_public_access_block" "state" {
-  bucket = aws_s3_bucket.state.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
 }
 
 # ---------------------------------------------------------------------------
-# S3 bucket for import exercise (Q9)
+# GCS bucket for import exercise (Q9)
 # ---------------------------------------------------------------------------
 
-resource "aws_s3_bucket" "import_target" {
-  bucket        = "tf-practice-import-${random_id.import_bucket.hex}"
+resource "google_storage_bucket" "import_target" {
+  name          = "tf-practice-import-${random_id.suffix.hex}"
+  location      = "US-CENTRAL1"
+  project       = var.gcp_project
   force_destroy = true
 
-  tags = {
-    Purpose = "TerraformPracticeTest"
-    Role    = "import-exercise"
+  labels = {
+    purpose = "terraform-practice-test"
+    role    = "import-exercise"
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "import_target" {
-  bucket = aws_s3_bucket.import_target.id
+# ---------------------------------------------------------------------------
+# VPC network for data source lookup (Q4)
+# ---------------------------------------------------------------------------
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+resource "google_compute_network" "practice" {
+  name                    = "practice-vpc"
+  project                 = var.gcp_project
+  auto_create_subnetworks = false
 }
 
 # ---------------------------------------------------------------------------
-# Default VPC lookup (Q4)
+# Create working directory tree
 # ---------------------------------------------------------------------------
 
-data "aws_vpc" "default" {
-  default = true
-}
-
-# ---------------------------------------------------------------------------
-# Write environment information to well-known files
-# These files are read by the practice questions at test time.
-# ---------------------------------------------------------------------------
-
-# Create the working directory tree up front so learners don't need to
-resource "null_resource" "create_work_dirs" {
+resource "null_resource" "create_dirs" {
   provisioner "local-exec" {
     command = <<-EOT
       mkdir -p ~/tf-practice/q01
@@ -128,62 +116,57 @@ resource "null_resource" "create_work_dirs" {
       mkdir -p ~/tf-practice/q08
       mkdir -p ~/tf-practice/q09
       mkdir -p ~/tf-practice/q10
-      mkdir -p ~/tf-practice/q11/modules/namer
+      mkdir -p ~/tf-practice/q11/modules/labeler
       mkdir -p ~/tf-practice/q11/tests
       mkdir -p ~/tf-practice/q12
     EOT
   }
 }
 
-# Write the state bucket name for Q3
-resource "null_resource" "write_state_bucket_name" {
-  depends_on = [aws_s3_bucket.state, null_resource.create_work_dirs]
+# ---------------------------------------------------------------------------
+# Write environment information to well-known files
+# These files are read by the practice questions at test time.
+# ---------------------------------------------------------------------------
+
+resource "null_resource" "write_files" {
+  depends_on = [
+    google_storage_bucket.practice_state,
+    google_storage_bucket.import_target,
+    google_compute_network.practice,
+    null_resource.create_dirs,
+  ]
 
   triggers = {
-    bucket_name = aws_s3_bucket.state.bucket
+    state_bucket  = google_storage_bucket.practice_state.name
+    import_bucket = google_storage_bucket.import_target.name
+    vpc_self_link = google_compute_network.practice.self_link
   }
 
   provisioner "local-exec" {
-    command = "printf '%s' '${aws_s3_bucket.state.bucket}' > /tmp/practice-bucket-name.txt"
+    command = <<-EOT
+      printf '%s' '${google_storage_bucket.practice_state.name}' > /tmp/practice-bucket-name.txt
+      printf '%s' '${google_storage_bucket.import_target.name}' > /tmp/practice-import-bucket.txt
+      printf '%s' '${google_compute_network.practice.self_link}' > /tmp/practice-vpc-selflink.txt
+    EOT
   }
 }
 
-# Write the import bucket name for Q9
-resource "null_resource" "write_import_bucket_name" {
-  depends_on = [aws_s3_bucket.import_target, null_resource.create_work_dirs]
+# ---------------------------------------------------------------------------
+# Q7 template file
+# $${env} and $${project} are HCL escapes for literal ${ in the file content.
+# The file written to disk contains: ${env} and ${project} — correct templatefile() syntax.
+# ---------------------------------------------------------------------------
 
-  triggers = {
-    bucket_name = aws_s3_bucket.import_target.bucket
-  }
-
-  provisioner "local-exec" {
-    command = "printf '%s' '${aws_s3_bucket.import_target.bucket}' > /tmp/practice-import-bucket.txt"
-  }
-}
-
-# Write the default VPC ID for Q4
-resource "null_resource" "write_vpc_id" {
-  depends_on = [null_resource.create_work_dirs]
-
-  triggers = {
-    vpc_id = data.aws_vpc.default.id
-  }
-
-  provisioner "local-exec" {
-    command = "printf '%s' '${data.aws_vpc.default.id}' > /tmp/practice-vpc-id.txt"
-  }
-}
-
-# Write the Q7 template file to the working directory
 resource "local_file" "q07_template" {
-  depends_on = [null_resource.create_work_dirs]
+  depends_on = [null_resource.create_dirs]
 
-  filename = pathexpand("~/tf-practice/q07/template.txt.tpl")
-  content  = "Hello, $${name}! You are in $${region}.\n"
-
-  # Note: $${} is the HCL escape for a literal ${ in the content string.
-  # The file written to disk will contain: Hello, ${name}! You are in ${region}.
-  # which is the correct templatefile() syntax.
+  filename = pathexpand("~/tf-practice/q07/startup.sh.tpl")
+  content  = <<-EOT
+    #!/bin/bash
+    ENV="$${env}"
+    PROJECT="$${project}"
+    echo "Running $${project} in $${env}"
+  EOT
 }
 
 # ---------------------------------------------------------------------------
@@ -191,36 +174,37 @@ resource "local_file" "q07_template" {
 # ---------------------------------------------------------------------------
 
 output "state_bucket_name" {
-  description = "Name of the S3 bucket to use as the remote state backend (Q3)"
-  value       = aws_s3_bucket.state.bucket
+  description = "Name of the GCS bucket to use as the remote state backend (Q3)"
+  value       = google_storage_bucket.practice_state.name
 }
 
 output "import_bucket_name" {
-  description = "Name of the S3 bucket to import in Q9"
-  value       = aws_s3_bucket.import_target.bucket
+  description = "Name of the GCS bucket to import in Q9"
+  value       = google_storage_bucket.import_target.name
 }
 
-output "default_vpc_id" {
-  description = "ID of the default VPC (Q4)"
-  value       = data.aws_vpc.default.id
+output "vpc_self_link" {
+  description = "self_link of the practice VPC network (Q4)"
+  value       = google_compute_network.practice.self_link
 }
 
-output "default_vpc_cidr" {
-  description = "CIDR block of the default VPC — expected answer for Q4"
-  value       = data.aws_vpc.default.cidr_block
+output "vpc_name" {
+  description = "Name of the practice VPC network"
+  value       = google_compute_network.practice.name
 }
 
 output "q07_template_path" {
-  description = "Path to the template file created for Q7"
-  value       = pathexpand("~/tf-practice/q07/template.txt.tpl")
+  description = "Path to the startup script template created for Q7"
+  value       = pathexpand("~/tf-practice/q07/startup.sh.tpl")
 }
 
 output "setup_complete" {
-  description = "Reminder of the files written for the test"
+  description = "Summary of files and resources created for the practice test"
   value = {
-    state_bucket_file  = "/tmp/practice-bucket-name.txt"
-    import_bucket_file = "/tmp/practice-import-bucket.txt"
-    vpc_id_file        = "/tmp/practice-vpc-id.txt"
-    q07_template       = "~/tf-practice/q07/template.txt.tpl"
+    state_bucket_file  = "/tmp/practice-bucket-name.txt  (GCS bucket name for Q3 backend)"
+    import_bucket_file = "/tmp/practice-import-bucket.txt (GCS bucket name for Q9 import)"
+    vpc_selflink_file  = "/tmp/practice-vpc-selflink.txt  (VPC self_link for Q4)"
+    q07_template       = "~/tf-practice/q07/startup.sh.tpl"
+    work_dirs          = "~/tf-practice/q01 … q12"
   }
 }

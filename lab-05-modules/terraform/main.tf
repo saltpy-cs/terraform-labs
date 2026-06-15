@@ -2,23 +2,19 @@ terraform {
   required_version = ">= 1.5.0"
 
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
+    google = {
+      source  = "hashicorp/google"
       version = "~> 5.0"
     }
   }
 }
 
-provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = {
-      Project   = var.project_name
-      Lab       = "05-modules"
-      ManagedBy = "terraform"
-    }
-  }
+provider "google" {
+  project = var.gcp_project
+  region  = var.gcp_region
+  zone    = var.gcp_zone
+  # Authentication via Application Default Credentials (ADC).
+  # Run: gcloud auth application-default login
 }
 
 # ---------------------------------------------------------------------------
@@ -29,9 +25,9 @@ provider "aws" {
 #   - No version pinning (you control the source).
 #   - Good for sharing code within a single repository.
 #
-# REGISTRY: source = "terraform-aws-modules/vpc/aws"
+# REGISTRY: source = "terraform-google-modules/network/google"
 #   - Downloaded from registry.terraform.io on `terraform init`.
-#   - Always pin with `version = "~> 5.0"` to avoid unintended upgrades.
+#   - Always pin with `version = "~> 9.0"` to avoid unintended upgrades.
 #   - Good for battle-tested community modules.
 # ---------------------------------------------------------------------------
 
@@ -41,86 +37,81 @@ provider "aws" {
 module "vpc" {
   source = "./modules/vpc"
 
-  vpc_name            = "${var.project_name}-vpc"
-  vpc_cidr            = "10.0.0.0/16"
-  public_subnet_cidrs = ["10.0.1.0/24", "10.0.2.0/24"]
-  enable_dns_hostnames = true
+  network_name            = "${var.project_name}-vpc"
+  project                 = var.gcp_project
+  region                  = var.gcp_region
+  subnet_cidr             = "10.0.0.0/24"
+  auto_create_subnetworks = false
 
   tags = {
-    Environment = "lab"
+    environment = "lab"
   }
 }
 
 # ---------------------------------------------------------------------------
-# Exercise 7: Registry module (comment this block in for the exercise, then
-# comment it back out before continuing to avoid extra cost and time).
+# Exercise 8 — Registry module (comment this block in for the exercise, then
+# comment it back out before continuing).
 #
 # module "vpc_registry" {
-#   source  = "terraform-aws-modules/vpc/aws"
-#   version = "~> 5.0"
+#   source  = "terraform-google-modules/network/google"
+#   version = "~> 9.0"
 #
-#   name = "${var.project_name}-registry-vpc"
-#   cidr = "10.1.0.0/16"
+#   project_id   = var.gcp_project
+#   network_name = "${var.project_name}-registry-vpc"
+#   routing_mode = "GLOBAL"
 #
-#   azs            = ["${var.aws_region}a"]
-#   public_subnets = ["10.1.1.0/24"]
+#   subnets = [
+#     {
+#       subnet_name   = "${var.project_name}-registry-subnet"
+#       subnet_ip     = "10.1.0.0/24"
+#       subnet_region = var.gcp_region
+#     }
+#   ]
 # }
 # ---------------------------------------------------------------------------
 
-# Latest Amazon Linux 2023 AMI.
-data "aws_ami" "al2023" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*-x86_64"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
+# Latest Debian 12 image from the debian-cloud project.
+data "google_compute_image" "debian" {
+  family  = "debian-12"
+  project = "debian-cloud"
 }
 
-# Security group referencing the VPC via module output.
-resource "aws_security_group" "web" {
-  name        = "${var.project_name}-web-sg"
-  description = "Allow SSH from my IP"
-  # module.vpc.vpc_id consumes the vpc_id output declared in modules/vpc/outputs.tf.
-  vpc_id = module.vpc.vpc_id
+# Firewall rule allowing SSH from your IP.
+# References module.vpc.network_name — consuming a module output.
+resource "google_compute_firewall" "allow_ssh" {
+  name    = "${var.project_name}-allow-ssh"
+  project = var.gcp_project
+  network = module.vpc.network_name
 
-  ingress {
-    description = "SSH from my IP"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.my_ip_cidr]
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-web-sg"
-  }
+  source_ranges = [var.my_ip_cidr]
+  target_tags   = ["ssh-enabled"]
 }
 
-# EC2 instance placed in the first public subnet from the module.
-# module.vpc.public_subnet_ids is a list — [0] selects the first element.
-resource "aws_instance" "web" {
-  ami           = data.aws_ami.al2023.id
-  instance_type = "t3.nano"
+# GCE instance placed in the subnet from the module.
+# module.vpc.subnet_self_link is a URI — the correct reference for subnetwork.
+resource "google_compute_instance" "app" {
+  name         = "${var.project_name}-app"
+  machine_type = "e2-micro"
+  zone         = var.gcp_zone
+  project      = var.gcp_project
 
-  subnet_id                   = module.vpc.public_subnet_ids[0]
-  vpc_security_group_ids      = [aws_security_group.web.id]
-  associate_public_ip_address = true
+  tags = ["ssh-enabled"]
 
-  tags = {
-    Name = "${var.project_name}-web"
+  boot_disk {
+    initialize_params {
+      image = data.google_compute_image.debian.self_link
+    }
+  }
+
+  network_interface {
+    subnetwork = module.vpc.subnet_self_link
+
+    # Assign an ephemeral external IP so you can SSH in.
+    access_config {}
   }
 }

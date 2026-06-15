@@ -1,14 +1,14 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.5"
 
   required_providers {
     google = {
       source  = "hashicorp/google"
       version = "~> 6.0"
     }
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -17,25 +17,23 @@ terraform {
   }
 }
 
-# Default GCP provider — us-central1
+# Default provider — uses var.gcp_region (default: us-central1)
 provider "google" {
   project = var.gcp_project
   region  = var.gcp_region
   zone    = var.gcp_zone
 }
 
-# Aliased GCP provider — Europe region
-# Resources that use this provider must set: provider = google.europe
+# Aliased provider — europe-west1
+# Resources that set `provider = google.europe` are created in this region.
+# The project is the same; only the region changes.
 provider "google" {
   alias   = "europe"
   project = var.gcp_project
   region  = "europe-west1"
-  zone    = "europe-west1-b"
 }
 
-# AWS provider — declared to demonstrate multi-provider configuration.
-# No AWS resources are created in this lab; this shows that Terraform
-# initialises all declared providers at `terraform init` time.
-provider "aws" {
-  region = var.aws_region
-}
+# http provider — requires no credentials.
+# Used to demonstrate that Terraform can manage resources from multiple
+# providers in a single configuration, even lightweight ones with no auth.
+provider "http" {}

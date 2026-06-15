@@ -1,7 +1,18 @@
-variable "aws_region" {
-  description = "AWS region for all resources"
+variable "gcp_project" {
+  description = "Your GCP project ID (e.g. my-project-123456)"
   type        = string
-  default     = "us-east-1"
+}
+
+variable "gcp_region" {
+  description = "Default GCP region for regional resources"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "gcp_zone" {
+  description = "Default GCP zone for zonal resources such as GCE instances"
+  type        = string
+  default     = "us-central1-a"
 }
 
 variable "project_name" {
@@ -23,33 +34,33 @@ variable "enable_production" {
 }
 
 variable "instance_config" {
-  description = "Per-environment instance configuration"
+  description = "Per-environment instance configuration. All use e2-micro for lab cost."
   type = map(object({
-    instance_type = string
-    disk_size     = number
-    tags          = map(string)
+    machine_type = string
+    disk_size    = number
+    labels       = map(string)
   }))
   default = {
     dev = {
-      instance_type = "t3.nano"
-      disk_size     = 8
-      tags = {
+      machine_type = "e2-micro"
+      disk_size    = 10
+      labels = {
         cost_center = "engineering"
         tier        = "development"
       }
     }
     staging = {
-      instance_type = "t3.nano"
-      disk_size     = 8
-      tags = {
+      machine_type = "e2-micro"
+      disk_size    = 10
+      labels = {
         cost_center = "engineering"
         tier        = "staging"
       }
     }
     prod = {
-      instance_type = "t3.nano"
-      disk_size     = 10
-      tags = {
+      machine_type = "e2-micro"
+      disk_size    = 10
+      labels = {
         cost_center = "operations"
         tier        = "production"
       }
@@ -58,12 +69,7 @@ variable "instance_config" {
 }
 
 variable "allowed_ports" {
-  description = "TCP ports to allow in the security group"
-  type        = list(number)
-  default     = [22, 80, 443]
-}
-
-variable "my_ip_cidr" {
-  description = "Your public IP in CIDR notation (e.g. 1.2.3.4/32). Used to restrict SSH access."
-  type        = string
+  description = "TCP ports to open in the firewall rule"
+  type        = list(string)
+  default     = ["22", "80", "443"]
 }

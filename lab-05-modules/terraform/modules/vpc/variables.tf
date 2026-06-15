@@ -1,28 +1,33 @@
-variable "vpc_name" {
-  description = "Name of the VPC. Used in resource tags."
+variable "network_name" {
+  description = "Name for the VPC network and subnet."
   type        = string
 }
 
-variable "vpc_cidr" {
-  description = "CIDR block for the VPC."
+variable "project" {
+  description = "GCP project ID in which to create the network."
   type        = string
-  default     = "10.0.0.0/16"
 }
 
-variable "public_subnet_cidrs" {
-  description = "List of CIDR blocks for public subnets. One subnet is created per entry."
-  type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
+variable "region" {
+  description = "GCP region for the subnetwork."
+  type        = string
+  default     = "us-central1"
 }
 
-variable "enable_dns_hostnames" {
-  description = "Whether to enable DNS hostnames on the VPC. Required for public EC2 DNS names."
+variable "subnet_cidr" {
+  description = "CIDR range for the subnetwork."
+  type        = string
+  default     = "10.0.0.0/24"
+}
+
+variable "auto_create_subnetworks" {
+  description = "When true GCP creates a subnet in every region automatically (legacy mode). Set to false for custom-mode networks."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "tags" {
-  description = "Additional tags to apply to all resources created by this module."
+  description = "Arbitrary key/value labels attached to the network resource."
   type        = map(string)
   default     = {}
 }

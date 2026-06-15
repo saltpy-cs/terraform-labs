@@ -1,8 +1,8 @@
-# Unit tests for the s3-bucket module.
-# Uses mock_provider "aws" — no real AWS API calls are made.
+# Unit tests for the gcs-bucket module.
+# Uses mock_provider "google" — no real GCP API calls are made.
 # These tests run fast (< 1 second) and cost nothing.
 
-mock_provider "aws" {}
+mock_provider "google" {}
 
 # ── Test 1: Versioning enabled ────────────────────────────────────────────────
 
@@ -10,14 +10,15 @@ run "versioning_enabled" {
   command = apply
 
   module {
-    source = "./modules/s3-bucket"
+    source = "./modules/gcs-bucket"
   }
 
   variables {
     bucket_name       = "test-bucket-versioning-on"
+    project           = "mock-project"
     enable_versioning = true
     environment       = "dev"
-    tags              = { test = "true" }
+    labels            = { test = "true" }
   }
 
   assert {
@@ -26,8 +27,8 @@ run "versioning_enabled" {
   }
 
   assert {
-    condition     = output.bucket_id != ""
-    error_message = "bucket_id should not be empty"
+    condition     = output.bucket_name != ""
+    error_message = "bucket_name should not be empty"
   }
 }
 
@@ -37,14 +38,15 @@ run "versioning_disabled" {
   command = apply
 
   module {
-    source = "./modules/s3-bucket"
+    source = "./modules/gcs-bucket"
   }
 
   variables {
     bucket_name       = "test-bucket-versioning-off"
+    project           = "mock-project"
     enable_versioning = false
     environment       = "staging"
-    tags              = {}
+    labels            = {}
   }
 
   assert {
@@ -62,11 +64,12 @@ run "invalid_environment_rejected" {
   command = plan
 
   module {
-    source = "./modules/s3-bucket"
+    source = "./modules/gcs-bucket"
   }
 
   variables {
     bucket_name = "test-bucket-bad-env"
+    project     = "mock-project"
     environment = "invalid"
   }
 

@@ -1,4 +1,0 @@
-aws_region   = "us-east-1"
-project_name = "tf-lab04"
-vpc_cidr     = "10.0.0.0/16"
-my_ip_cidr   = "YOUR_IP/32" # run: curl ifconfig.me

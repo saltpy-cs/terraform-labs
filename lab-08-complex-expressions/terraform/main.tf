@@ -1,185 +1,146 @@
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.5"
 
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 6.0"
+    }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
     }
   }
 }
 
-provider "aws" {
-  region = var.aws_region
-
-  default_tags {
-    tags = local.common_tags
-  }
+provider "google" {
+  project = var.gcp_project
+  region  = var.gcp_region
+  zone    = var.gcp_zone
 }
 
-# ─── VPC ──────────────────────────────────────────────────────────────────────
+# ─── Debian image ─────────────────────────────────────────────────────────────
 
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  tags = {
-    Name = "${var.project_name}-vpc"
-  }
+data "google_compute_image" "debian" {
+  family  = "debian-12"
+  project = "debian-cloud"
 }
 
-resource "aws_internet_gateway" "main" {
-  vpc_id = aws_vpc.main.id
+# ─── VPC Network ──────────────────────────────────────────────────────────────
 
-  tags = {
-    Name = "${var.project_name}-igw"
-  }
+resource "google_compute_network" "main" {
+  name                    = "${var.project_name}-vpc"
+  auto_create_subnetworks = false
+  description             = "Lab 08 VPC — managed by Terraform"
 }
 
-resource "aws_subnet" "main" {
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.1.0/24"
-  map_public_ip_on_launch = true
-  availability_zone       = "${var.aws_region}a"
+# ─── Subnet ───────────────────────────────────────────────────────────────────
 
-  tags = {
-    Name = "${var.project_name}-subnet"
-  }
+resource "google_compute_subnetwork" "main" {
+  name          = "${var.project_name}-subnet"
+  ip_cidr_range = "10.0.1.0/24"
+  region        = var.gcp_region
+  network       = google_compute_network.main.id
 }
 
-resource "aws_route_table" "main" {
-  vpc_id = aws_vpc.main.id
+# ─── Firewall with dynamic allow block ────────────────────────────────────────
+# local.firewall_allow_rules is a list of objects built from var.allowed_ports
+# in locals.tf. The dynamic block generates one `allow` block per element.
+# This pattern replaces hard-coding individual allow blocks.
 
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.main.id
-  }
+resource "google_compute_firewall" "main" {
+  name    = "${var.project_name}-fw"
+  network = google_compute_network.main.name
 
-  tags = {
-    Name = "${var.project_name}-rt"
-  }
-}
-
-resource "aws_route_table_association" "main" {
-  subnet_id      = aws_subnet.main.id
-  route_table_id = aws_route_table.main.id
-}
-
-# ─── Security Group with dynamic ingress rules ────────────────────────────────
-# The dynamic block iterates over local.security_group_rules (built in locals.tf
-# using a for expression over var.allowed_ports).
-
-resource "aws_security_group" "app" {
-  name        = "${var.project_name}-sg"
-  description = "Security group for lab 08 instances"
-  vpc_id      = aws_vpc.main.id
-
-  dynamic "ingress" {
-    for_each = local.security_group_rules
+  dynamic "allow" {
+    for_each = local.firewall_allow_rules
     content {
-      from_port   = ingress.value.port
-      to_port     = ingress.value.port
-      protocol    = "tcp"
-      cidr_blocks = ingress.value.cidr_blocks
-      description = ingress.value.description
+      protocol = allow.value.protocol
+      ports    = [allow.value.port]
     }
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    description = "Allow all outbound traffic"
-  }
-
-  tags = {
-    Name = "${var.project_name}-sg"
-  }
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["${var.project_name}-app"]
 }
 
-# ─── AMI data source ──────────────────────────────────────────────────────────
-
-data "aws_ami" "al2023" {
-  most_recent = true
-  owners      = ["amazon"]
-
-  filter {
-    name   = "name"
-    values = ["al2023-ami-*-x86_64"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-}
-
-# ─── EC2 Instances ────────────────────────────────────────────────────────────
-# for_each = toset(local.enabled_envs) creates one instance per enabled environment.
+# ─── GCE Instances (one per enabled environment) ──────────────────────────────
+# for_each = toset(local.enabled_envs) creates one instance per enabled env.
 # each.key is the environment name ("dev", "staging", "prod").
 #
-# Note: toset() is required because for_each on a list would use numeric indices
-# as keys. toset() converts the list to a set, using the values as keys.
+# toset() converts the list to a set so that env names (not numeric indices)
+# become the for_each keys. This is important: keys are stable across list
+# reordering, and they are used as instance addresses in state.
+#
+# Note: for_each resources cannot use splat syntax ([*]) — see Exercise 7.
 
-resource "aws_instance" "app" {
+resource "google_compute_instance" "app" {
   for_each = toset(local.enabled_envs)
 
-  # lookup() safely retrieves a value from a map, returning the default if the
-  # key is not found. Here: get the instance_type for this env, fall back to dev.
-  ami           = data.aws_ami.al2023.id
-  instance_type = lookup(var.instance_config, each.key, var.instance_config["dev"]).instance_type
-  subnet_id     = aws_subnet.main.id
+  name = "${var.project_name}-${each.key}"
 
-  vpc_security_group_ids = [aws_security_group.app.id]
+  # lookup() retrieves a value from a map, returning the default if the key
+  # is absent. Here: get the machine_type for this env, fall back to "dev".
+  machine_type = lookup(var.instance_config, each.key, var.instance_config["dev"]).machine_type
+  zone         = var.gcp_zone
 
-  # templatefile() reads the template file and substitutes variables.
-  # path.module is the directory containing this .tf file.
-  user_data = templatefile("${path.module}/../templates/userdata.sh.tpl", {
+  tags = ["${var.project_name}-app"]
+
+  boot_disk {
+    initialize_params {
+      image = data.google_compute_image.debian.self_link
+      size  = lookup(var.instance_config, each.key, var.instance_config["dev"]).disk_size
+    }
+  }
+
+  network_interface {
+    subnetwork = google_compute_subnetwork.main.id
+    access_config {}
+  }
+
+  # templatefile() reads the template file and substitutes ${env} and ${project}.
+  # path.module is the directory of this .tf file (terraform/).
+  # The template is at templates/startup.sh.tpl, one level up from terraform/.
+  metadata_startup_script = templatefile("${path.module}/../templates/startup.sh.tpl", {
     env     = each.key
     project = var.project_name
   })
 
-  root_block_device {
-    volume_size = lookup(var.instance_config, each.key, var.instance_config["dev"]).disk_size
-  }
-
-  tags = merge(
-    lookup(var.instance_config, each.key, var.instance_config["dev"]).tags,
+  labels = merge(
+    local.common_labels,
+    lookup(var.instance_config, each.key, var.instance_config["dev"]).labels,
     {
-      Name        = "${var.project_name}-${each.key}"
       environment = each.key
     }
   )
 }
 
 # ─── Conditional resource (prod-only) ─────────────────────────────────────────
-# count = 0 means Terraform creates no instances of this resource.
-# count = 1 means Terraform creates exactly one.
-# This is the standard pattern for optional/conditional resources.
+# count = 0 → Terraform creates no instances of this resource.
+# count = 1 → Terraform creates exactly one.
+# This is the standard Terraform pattern for optional/feature-flagged resources.
 
-resource "aws_ssm_parameter" "prod_config" {
+resource "google_storage_bucket" "prod_data" {
   count = var.enable_production ? 1 : 0
 
-  name  = "/${var.project_name}/prod/enabled"
-  type  = "String"
-  value = "true"
+  name          = "${var.project_name}-prod-data-${substr(md5(var.gcp_project), 0, 8)}"
+  location      = "US"
+  storage_class = "STANDARD"
+  force_destroy = true
 
-  tags = {
-    Name        = "${var.project_name}-prod-config"
+  uniform_bucket_level_access = true
+
+  labels = merge(local.common_labels, {
     environment = "prod"
-  }
+  })
 }
 
-# ─── Debug: echo the env_map local value during apply ─────────────────────────
-# This null_resource uses a local-exec provisioner to print local.env_map
-# as JSON. Useful for verifying complex locals during development.
-# Remove this in production configurations.
+# ─── Debug: print env_map during apply ────────────────────────────────────────
+# This null_resource uses a local-exec provisioner to echo local.env_map as JSON.
+# Useful for verifying complex locals during development. Remove in production.
 
 resource "null_resource" "debug" {
   triggers = {
-    # Re-run when the env_map changes
     env_map_hash = jsonencode(local.env_map)
   }
 

@@ -13,45 +13,23 @@ Install these tools before starting:
 brew tap hashicorp/tap
 brew install hashicorp/tap/terraform
 
-# AWS CLI
-brew install awscli
-
 # Google Cloud CLI
 brew install --cask google-cloud-sdk
 
 # Verify versions
 terraform version   # should be >= 1.6
-aws --version
 gcloud --version
 ```
 
 ## Authentication Setup
 
-### AWS
-
-Configure credentials for a region of your choice. Labs use `us-east-1` by default.
+All cloud labs use GCP via Application Default Credentials (ADC).
 
 ```bash
-aws configure
-# AWS Access Key ID:     <your key>
-# AWS Secret Access Key: <your secret>
-# Default region name:   us-east-1
-# Default output format: json
-```
-
-Verify access:
-
-```bash
-aws sts get-caller-identity
-```
-
-> If you use AWS SSO or named profiles, export `AWS_PROFILE=<profile>` before running
-> Terraform commands.
-
-### GCP (labs 07–08)
-
-```bash
+# Authenticate your user account for ADC
 gcloud auth application-default login
+
+# Set the default project (required — replace with your project ID)
 gcloud config set project <your-project-id>
 ```
 
@@ -59,25 +37,45 @@ Verify access:
 
 ```bash
 gcloud auth application-default print-access-token
+gcloud projects describe <your-project-id>
+```
+
+> If you use a service account instead of a user account, set
+> `GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json` before running Terraform.
+
+### Required GCP APIs
+
+Labs 04–09 create GCP resources. Enable the required APIs once per project:
+
+```bash
+gcloud services enable compute.googleapis.com storage.googleapis.com
+```
+
+Labs 07+ also need:
+
+```bash
+gcloud services enable iam.googleapis.com
 ```
 
 ## Cost Warning
 
-Labs 04–09 create real AWS resources. Approximate costs if you follow each lab and
-clean up immediately:
+Labs 04–10 create real GCP resources. Estimated costs if you follow each lab and
+clean up promptly:
 
 | Lab | Resources | Estimated cost |
 |-----|-----------|---------------|
-| 04  | EC2 t3.nano, VPC | < $0.01 |
-| 05  | EC2 t3.nano, VPC (via module) | < $0.01 |
-| 06  | 3× EC2 t3.nano, SGs | < $0.05 |
-| 07  | GCE e2-micro (GCP free tier), GCS bucket | ~$0.00 |
-| 08  | EC2 t3.nano, GCS bucket | < $0.01 |
-| 09  | EC2 t3.nano × 2 workspaces | < $0.02 |
-| 10  | S3 bucket | ~$0.00 |
+| 04  | GCE e2-micro, VPC | ~$0.00 (free tier) |
+| 05  | GCE e2-micro, VPC (via module) | ~$0.00 (free tier) |
+| 06  | 3× GCE e2-micro | ~$0.00 (free tier for first, < $0.02 for others) |
+| 07  | GCS bucket, GCE e2-micro, IAM | ~$0.00 |
+| 08  | GCE e2-micro, GCS bucket | ~$0.00 |
+| 09  | GCE e2-micro × 2 workspaces | < $0.02 |
+| 10  | GCS bucket | ~$0.00 |
 
-**Always run `terraform destroy` at the end of each lab.** Leaving resources running
-will incur ongoing charges.
+GCP's free tier includes 1 e2-micro instance per month in `us-central1`, `us-west1`,
+or `us-east1`. Standard GCS storage costs $0.020/GB/month — negligible for small objects.
+
+**Always run `terraform destroy` at the end of each lab.**
 
 ## Lab Overview
 
@@ -85,14 +83,14 @@ will incur ongoing charges.
 |-----|-------|-----------|----------------|
 | [01 - HCL Fundamentals](lab-01-hcl-fundamentals/README.md) | Blocks, lifecycle, state intro | `null`, `random` | Associate |
 | [02 - Variables, Outputs, Locals](lab-02-variables-outputs/README.md) | Types, validation, data sources | `random` | Associate |
-| [03 - State Management](lab-03-state-management/README.md) | Remote backends, locking, state CLI | AWS | Associate |
-| [04 - AWS Provider Basics](lab-04-aws-basics/README.md) | VPC, EC2, dependencies | AWS | Associate |
-| [05 - Modules](lab-05-modules/README.md) | Writing and calling modules, Registry | AWS | Associate + Pro |
-| [06 - Advanced AWS](lab-06-advanced-aws/README.md) | count, for_each, dynamic blocks, lifecycle | AWS | Associate + Pro |
-| [07 - GCP Provider](lab-07-gcp-provider/README.md) | GCP resources, IAM, provider aliases | AWS + GCP | Associate |
-| [08 - Complex Expressions](lab-08-complex-expressions/README.md) | for, splat, templatefile, conditionals | AWS + GCP | Pro |
-| [09 - Workspaces](lab-09-workspaces/README.md) | Workspace commands, env patterns | AWS | Associate + Pro |
-| [10 - Testing & HCP Terraform](lab-10-testing-hcp/README.md) | terraform test, HCP Terraform, Sentinel | AWS + HCP | Pro |
+| [03 - State Management](lab-03-state-management/README.md) | GCS backend, locking, state CLI | GCP | Associate |
+| [04 - GCP Provider Basics](lab-04-gcp-basics/README.md) | VPC, firewall, GCE, dependencies | GCP | Associate |
+| [05 - Modules](lab-05-modules/README.md) | Writing and calling modules, Registry | GCP | Associate + Pro |
+| [06 - Advanced GCP](lab-06-advanced-gcp/README.md) | count, for_each, dynamic blocks, lifecycle | GCP | Associate + Pro |
+| [07 - IAM & Provider Aliases](lab-07-gcp-provider/README.md) | Service accounts, IAM, multi-region aliases | GCP | Associate |
+| [08 - Complex Expressions](lab-08-complex-expressions/README.md) | for, splat, templatefile, conditionals | GCP | Pro |
+| [09 - Workspaces](lab-09-workspaces/README.md) | Workspace commands, env patterns | GCP | Associate + Pro |
+| [10 - Testing & HCP Terraform](lab-10-testing-hcp/README.md) | terraform test, HCP Terraform, Sentinel | GCP + HCP | Pro |
 | [Practice Test](practice-test/README.md) | Full exam simulation | — | Associate + Pro |
 
 ## How to Work Through the Labs
@@ -118,7 +116,7 @@ The Associate exam tests:
 - State and remote backends (lab 03)
 - Provider configuration and resources (labs 04, 07)
 - Module consumption (lab 05)
-- Built-in functions and expressions (lab 06, 08)
+- Built-in functions and expressions (labs 06, 08)
 - Workspaces (lab 09)
 - HCP Terraform basics (lab 10)
 
@@ -130,4 +128,4 @@ The Professional exam goes deeper on:
 - Testing modules with `terraform test` (lab 10)
 - Sentinel policy as code (lab 10)
 - HCP Terraform collaboration workflows (lab 10)
-- Multi-provider architectures (labs 07–08)
+- Multi-provider and provider alias patterns (lab 07)

@@ -1,7 +1,18 @@
-variable "aws_region" {
-  description = "AWS region for all resources"
+variable "gcp_project" {
+  description = "GCP project ID for all resources"
   type        = string
-  default     = "us-east-1"
+}
+
+variable "gcp_region" {
+  description = "GCP region for all resources"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "gcp_zone" {
+  description = "GCP zone for compute instances"
+  type        = string
+  default     = "us-central1-a"
 }
 
 variable "project_name" {
@@ -11,6 +22,6 @@ variable "project_name" {
 }
 
 variable "state_bucket" {
-  description = "S3 bucket name for Terraform state. Create this bucket before running terraform init."
+  description = "GCS bucket name for Terraform state. Create this bucket before running terraform init."
   type        = string
 }

@@ -1,4 +1,4 @@
-# Lab 08 — Complex Expressions
+# Lab 08 — Complex Expressions (GCP)
 
 ## Objectives
 
@@ -6,13 +6,13 @@ By the end of this lab you will be able to:
 
 - Use `for` expressions to transform lists and maps
 - Use splat expressions (`[*]`) and understand when to use `for` instead
-- Use the `templatefile()` function to render scripts with variables
-- Write conditional expressions (ternary operator) to toggle resources
+- Use the `templatefile()` function to render startup scripts with variables
+- Write conditional expressions (ternary operator) to toggle resources on and off
 - Use built-in functions: `join`, `split`, `flatten`, `merge`, `lookup`, `length`, `toset`, `tomap`
 - Compose complex `locals` blocks from these primitives
 - Use `terraform console` to test expressions interactively
 
-**Estimated cost:** Three EC2 t3.nano instances (~$0.0052/hr each). Destroy promptly. Total for a one-hour lab: ~$0.02.
+**Estimated cost:** GCE e2-micro instances (~$0.00 for the first under GCP Always Free; < $0.02/hr for additional instances). Destroy promptly after the lab.
 
 ---
 
@@ -22,14 +22,14 @@ By the end of this lab you will be able to:
 
 A `for` expression transforms a collection. It comes in two forms:
 
-**List form** (square brackets → returns a list):
+**List form** (square brackets — returns a list):
 ```hcl
 [for item in var.servers : upper(item.name)]
 ```
 
-**Map form** (curly braces + `=>` → returns a map):
+**Map form** (curly braces + `=>` — returns a map):
 ```hcl
-{for k, v in var.configs : k => v.instance_type}
+{for k, v in var.configs : k => v.machine_type}
 ```
 
 You can filter with an `if` clause:
@@ -39,49 +39,63 @@ You can filter with an `if` clause:
 
 Iterating over a map gives you both key and value:
 ```hcl
-[for k, v in var.tags : "${k}=${v}"]
+[for k, v in var.labels : "${k}=${v}"]
 ```
 
-`for` expressions are evaluated at plan time — they operate on values known to Terraform before any API calls are made.
+`for` expressions are evaluated at plan time — they operate on values Terraform knows before any API calls.
+
+### Filtering with `if`
+
+The `if` clause inside a `for` expression conditionally excludes elements:
+
+```hcl
+enabled_envs = [
+  for env in var.environments : env
+  if env != "prod" || var.enable_production
+]
+```
+
+This keeps all non-prod environments unconditionally, and includes `prod` only when `enable_production` is true.
 
 ### Splat Expressions
 
-Splat is a shorthand for a common `for` pattern. It only works on resources managed with `count`:
+Splat is shorthand for a common `for` pattern. It only works on `count`-based resources:
 
 ```hcl
-# These two are equivalent for count-based resources:
-aws_instance.web[*].id
-[for i in aws_instance.web : i.id]
+# Equivalent for count-based resources:
+google_compute_instance.web[*].id
+[for i in google_compute_instance.web : i.id]
 ```
 
-**Important limitation:** Splat does not work on `for_each` resources. For `for_each` resources, always use a `for` expression:
+**Critical limitation:** Splat does **not** work on `for_each` resources. For `for_each` resources, always use a `for` expression:
 
 ```hcl
 # for_each resource — must use for expression
-[for k, v in aws_instance.app : v.id]
+[for k, v in google_compute_instance.app : v.id]
 
-# This would be a syntax error or return unexpected results:
-# aws_instance.app[*].id  ← do NOT use splat with for_each
+# This returns unexpected results with for_each — do NOT use:
+# google_compute_instance.app[*].id
 ```
 
 ### `templatefile()` Function
 
-`templatefile(path, vars)` reads a file and substitutes `${varname}` placeholders:
+`templatefile(path, vars)` reads a file and substitutes `${varname}` placeholders at plan time:
 
 ```hcl
-user_data = templatefile("${path.module}/templates/init.sh.tpl", {
-  env     = var.environment
+metadata_startup_script = templatefile("${path.module}/../templates/startup.sh.tpl", {
+  env     = each.key
   project = var.project_name
 })
 ```
 
-The template file uses standard HCL interpolation syntax:
+The template file uses HCL interpolation syntax:
+
 ```bash
 #!/bin/bash
-echo "Starting ${project} in ${env}" >> /var/log/init.log
+echo "Starting ${project} in ${env}" >> /var/log/startup.log
 ```
 
-`templatefile()` is preferred over `file()` + string interpolation because it keeps scripts in separate files (easier to edit, syntax-highlight, and test), and it fails at plan time if a referenced variable is missing.
+`templatefile()` fails at plan time if a referenced variable is missing from the `vars` map. This is safer than string interpolation on a raw `file()` read.
 
 ### Conditional Expressions
 
@@ -89,62 +103,69 @@ The ternary operator: `condition ? true_value : false_value`
 
 ```hcl
 # Toggle a resource with count
-resource "aws_instance" "prod_only" {
+resource "google_storage_bucket" "prod_data" {
   count = var.enable_production ? 1 : 0
   ...
 }
 
-# Select a value based on a condition
-instance_type = var.environment == "prod" ? "t3.small" : "t3.nano"
-
-# Handle null/optional values
-subnet_id = var.custom_subnet_id != null ? var.custom_subnet_id : aws_subnet.default.id
+# Reference a conditional resource (always index with [0])
+output "prod_bucket" {
+  value = var.enable_production ? google_storage_bucket.prod_data[0].name : "not created"
+}
 ```
 
-When `count = 0`, Terraform creates no instances of the resource. When `count = 1`, it creates one. This is the standard pattern for optional resources.
+When `count = 0`, Terraform creates no instances of the resource. When `count = 1`, it creates exactly one.
+
+### Dynamic Blocks
+
+For resources that have repeating nested blocks, `dynamic` generates them from a collection:
+
+```hcl
+resource "google_compute_firewall" "main" {
+  dynamic "allow" {
+    for_each = local.firewall_allow_rules
+    content {
+      protocol = allow.value.protocol
+      ports    = [allow.value.port]
+    }
+  }
+}
+```
+
+`for_each` in a `dynamic` block iterates over a list or map. The loop variable is `<block_name>.value` for lists and `<block_name>.key` / `<block_name>.value` for maps.
 
 ### Built-in Functions
-
-Terraform has a rich standard library. Key functions for data transformation:
 
 | Function | What it does | Example |
 |---|---|---|
 | `join(sep, list)` | Joins list elements into a string | `join(", ", ["a","b"])` → `"a, b"` |
 | `split(sep, str)` | Splits a string into a list | `split(",", "a,b")` → `["a","b"]` |
-| `flatten(list_of_lists)` | Flattens nested lists | `flatten([[1,2],[3]])` → `[1,2,3]` |
-| `merge(map1, map2)` | Merges maps; map2 wins on conflict | `merge({a=1},{a=2,b=3})` → `{a=2,b=3}` |
-| `lookup(map, key, default)` | Safe map access with default | `lookup(m, "x", "none")` |
+| `flatten(list_of_lists)` | Flattens nested lists one level | `flatten([[1,2],[3]])` → `[1,2,3]` |
+| `merge(map1, map2)` | Merges maps; later maps win on conflict | `merge({a=1},{a=2,b=3})` → `{a=2,b=3}` |
+| `lookup(map, key, default)` | Safe map access with fallback | `lookup(m, "x", "none")` |
 | `length(val)` | Count of list/map/string elements | `length(["a","b"])` → `2` |
-| `toset(list)` | Converts list to set (removes duplicates) | `toset(["a","a","b"])` → `{"a","b"}` |
-| `tomap(object)` | Converts object to map | used with `for_each` |
-| `upper(str)` | Uppercase string | `upper("dev")` → `"DEV"` |
-| `format(fmt, ...)` | Printf-style formatting | `format("%s-%d", "x", 1)` |
+| `toset(list)` | Converts list to set (removes duplicates, stable keys for `for_each`) | `toset(["a","a","b"])` → `{"a","b"}` |
+| `tomap(object)` | Converts object to map | useful with `for_each` |
+| `upper(str)` | Uppercase | `upper("dev")` → `"DEV"` |
+| `jsonencode(val)` | Serialises any value to JSON string | useful for debugging locals |
 
 ### Composing `locals`
 
-`locals` blocks are the primary place to compose these functions into meaningful values:
+`locals` blocks are the right place to compose complex derived values. They are computed once at plan time and can be referenced anywhere:
 
 ```hcl
 locals {
-  # Derived from variables — computed once, referenced many times
   enabled_envs = [for e in var.environments : e if e != "prod" || var.enable_production]
-  
-  # Build a map for for_each
-  instance_map = {for e in local.enabled_envs : e => var.instance_config[e]}
-  
-  # Merge base tags with computed tags
-  common_tags = merge(var.base_tags, {
-    managed_by = "terraform"
-    project    = var.project_name
-  })
+  env_map      = {for e in local.enabled_envs : e => var.instance_config[e]}
+  common_labels = merge(var.base_labels, { managed_by = "terraform" })
 }
 ```
 
-Locals are not re-evaluated — they are computed once during planning and reused. This makes complex expressions fast and their values inspectable via `terraform console`.
+Define once; reference many times. Inspect them with `terraform console`.
 
-### Using `terraform console` for Testing
+### `terraform console` for Testing
 
-The `terraform console` command opens an interactive REPL for evaluating expressions against your current state and variable values:
+The `terraform console` command opens an interactive REPL that evaluates expressions against your current variable values and state:
 
 ```
 $ terraform console
@@ -162,27 +183,7 @@ tolist([
 > ^D
 ```
 
-This is invaluable for debugging complex expressions before committing them to configuration files.
-
-### Dynamic Blocks
-
-For resources that have repeating nested blocks, `dynamic` generates them from a collection:
-
-```hcl
-resource "aws_security_group" "web" {
-  dynamic "ingress" {
-    for_each = var.allowed_ports
-    content {
-      from_port   = ingress.value
-      to_port     = ingress.value
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-    }
-  }
-}
-```
-
-`for_each` in a `dynamic` block iterates over a list or map. The loop variable is `<block_name>.value` (for lists) or `<block_name>.key` / `<block_name>.value` (for maps).
+This is invaluable for debugging complex expressions before committing them to `.tf` files. It does not modify state.
 
 ---
 
@@ -190,9 +191,15 @@ resource "aws_security_group" "web" {
 
 ### Prerequisites
 
-- Terraform >= 1.6 installed
-- AWS CLI configured (`aws configure` or environment variables)
-- An AWS account with permissions to create EC2, VPC, and IAM resources
+- Terraform >= 1.5 installed
+- `gcloud` CLI installed and initialised (`gcloud init`)
+- A GCP project with billing enabled
+
+### Authenticate with GCP
+
+```bash
+gcloud auth application-default login
+```
 
 ### Configure Variables
 
@@ -202,8 +209,14 @@ cp terraform.tfvars.example terraform.tfvars
 ```
 
 Edit `terraform.tfvars`:
-- Set `my_ip_cidr` to your current public IP: `$(curl -s ifconfig.me)/32`
-- Optionally adjust `project_name` or `aws_region`
+
+```hcl
+gcp_project       = "your-actual-project-id"
+gcp_region        = "us-central1"
+gcp_zone          = "us-central1-a"
+project_name      = "tf-lab08"
+enable_production = true
+```
 
 ---
 
@@ -211,33 +224,48 @@ Edit `terraform.tfvars`:
 
 ### Exercise 1 — Read and Trace the Locals
 
-Open `terraform/locals.tf` and trace how each local value is built:
+Open `terraform/locals.tf` and trace how each local is built from variables. Before running anything, write down what you expect each local to contain when all three environments are enabled.
 
-1. `enabled_envs` — which variable controls whether prod is included?
-2. `instance_names` — what does the resulting list look like if all three environments are enabled?
-3. `env_map` — what is the structure of this map? What are the keys and values?
-4. `common_tags` — how does `merge()` work here?
-5. `security_group_rules` — what is each element of this list?
+1. `enabled_envs` — which variable controls whether `prod` is included?
+2. `instance_names` — what does the resulting list look like with all three envs?
+3. `env_map` — what are the keys? What are the values?
+4. `common_labels` — how does `merge()` work here?
+5. `firewall_allow_rules` — what is each element of this list?
 
-Write down the expected value of each local before running `terraform console` to verify.
+After you have written down your predictions, initialise Terraform and open the console to verify:
+
+```bash
+terraform init
+terraform console
+```
+
+In the console, evaluate (after a `terraform.tfvars` is in place):
+
+```
+local.enabled_envs
+local.instance_names
+local.env_map
+local.firewall_allow_rules
+```
+
+Type `Ctrl+D` to exit.
 
 ### Exercise 2 — Conditional Apply (enable_production=false)
 
 ```bash
-terraform init
-terraform apply -var='my_ip_cidr=0.0.0.0/0' -var='enable_production=false'
+terraform apply -var='enable_production=false'
 ```
 
-Type `yes` when prompted.
+Type `yes` when prompted. Expected: Terraform creates instances for `dev` and `staging` only. The `prod` instance and `google_storage_bucket.prod_data` are excluded.
 
-Expected: plan creates instances for `dev` and `staging` only — the `prod` instance is excluded because `enable_production=false`.
+Check the output:
 
-Observe the output:
 ```bash
 terraform output enabled_environments
 ```
 
 Expected:
+
 ```
 tolist([
   "dev",
@@ -245,74 +273,78 @@ tolist([
 ])
 ```
 
-The `prod` environment is absent.
+Check the prod bucket output:
+
+```bash
+terraform output prod_bucket
+```
+
+Expected:
+
+```
+"not created"
+```
 
 ### Exercise 3 — Re-apply with Production Enabled
 
 ```bash
-terraform apply -var='my_ip_cidr=0.0.0.0/0'
+terraform apply
 ```
 
-(The default `enable_production=true` is used now.)
+(The default `enable_production=true` from `terraform.tfvars` is used.)
 
-Expected: plan adds the `prod` instance. Observe:
+Expected: Terraform adds the `prod` instance and `google_storage_bucket.prod_data[0]`.
+
+Look for these lines in the plan:
+
 ```
-# aws_instance.app["prod"] will be created
+# google_compute_instance.app["prod"] will be created
+# google_storage_bucket.prod_data[0] will be created
 ```
 
 After apply:
+
 ```bash
 terraform output enabled_environments
+terraform output prod_bucket
 ```
 
 Expected:
+
 ```
 tolist([
   "dev",
   "staging",
   "prod",
 ])
+"tf-lab08-prod-data-xxxxxxxx"
 ```
 
-### Exercise 4 — Inspect Template Rendering
+### Exercise 4 — Inspect the Startup Script
 
 View the template source:
+
 ```bash
-cat templates/userdata.sh.tpl
+cat ../templates/startup.sh.tpl
 ```
 
-Find the rendered (base64-encoded) user_data in state:
+Inspect the rendered startup script for the `dev` instance in state:
+
 ```bash
-terraform state show 'aws_instance.app["dev"]' | grep user_data
+terraform state show 'google_compute_instance.app["dev"]' | grep -A5 metadata_startup_script
 ```
 
-Decode it:
-```bash
-terraform state show 'aws_instance.app["dev"]' | grep "user_data " | awk '{print $3}' | base64 -d
-```
+The `metadata_startup_script` attribute will show the rendered content with `${env}` and `${project}` replaced by `dev` and `tf-lab08`. This substitution happens at plan time when `templatefile()` is evaluated.
 
-Expected output (the rendered template with `dev` substituted):
-```bash
-#!/bin/bash
-# Provisioned by Terraform — do not edit manually
-ENV="dev"
-PROJECT="tf-lab08"
-echo "Starting tf-lab08 in dev environment" >> /var/log/startup.log
-yum install -y httpd
-systemctl start httpd
-echo "<h1>tf-lab08 - dev</h1>" > /var/www/html/index.html
-```
+### Exercise 5 — `terraform console` Session
 
-Notice how `${env}` and `${project}` were replaced with actual values at plan time by `templatefile()`.
+Open the console (with `terraform.tfvars` in place):
 
-### Exercise 5 — Interactive `terraform console`
-
-Open the console:
 ```bash
 terraform console
 ```
 
-Evaluate these expressions one by one. Predict the output before pressing Enter:
+Evaluate these expressions. Predict the output before pressing Enter each time.
 
 **List transformation:**
 ```
@@ -322,7 +354,7 @@ Expected: `tolist(["DEV", "STAGING", "PROD"])`
 
 **Map inversion:**
 ```
-{for k, v in {"a": 1, "b": 2} : v => k}
+{for k, v in {a=1, b=2} : v => k}
 ```
 Expected: `{ 1 = "a", 2 = "b" }`
 
@@ -332,91 +364,129 @@ Expected: `{ 1 = "a", 2 = "b" }`
 ```
 Expected: `tolist(["dev"])`
 
-**Using merge:**
+**join:**
 ```
-merge({"env": "dev", "owner": "alice"}, {"owner": "bob", "project": "labs"})
+join(", ", ["a", "b", "c"])
 ```
-Expected: `{ "env" = "dev", "owner" = "bob", "project" = "labs" }` — `bob` wins because it came second.
+Expected: `"a, b, c"`
 
 **flatten:**
 ```
-flatten([["a", "b"], ["c"], ["d", "e"]])
+flatten([[1, 2], [3, 4]])
 ```
-Expected: `tolist(["a", "b", "c", "d", "e"])`
+Expected: `tolist([1, 2, 3, 4])`
 
-**toset (removes duplicates):**
+**merge (later map wins on conflict):**
+```
+merge({owner = "alice", env = "dev"}, {owner = "bob", project = "labs"})
+```
+Expected: `{ "env" = "dev", "owner" = "bob", "project" = "labs" }`
+
+**toset (removes duplicates; stable keys for for_each):**
 ```
 toset(["dev", "dev", "staging", "prod", "staging"])
 ```
 Expected: `toset(["dev", "prod", "staging"])`
 
-Exit the console with `Ctrl+D`.
+Exit with `Ctrl+D`.
 
-### Exercise 6 — Splat vs `for` Expression
+### Exercise 6 — for_each Resources and Outputs
 
-The instances in this lab use `for_each`, not `count`. This means splat syntax does not apply to them.
-
-Open `terraform console` again and try:
-```
-[for k, v in aws_instance.app : v.id]
-```
-Expected: a list of instance IDs (one per environment).
-
-Now inspect what the `instance_ids` output looks like (a map, not a list):
 ```bash
 terraform output instance_ids
 ```
 
 Expected (a map keyed by environment name):
+
 ```
 {
-  "dev"     = "i-0abc123..."
-  "prod"    = "i-0def456..."
-  "staging" = "i-0ghi789..."
+  "dev"     = "projects/your-project/zones/us-central1-a/instances/tf-lab08-dev"
+  "prod"    = "projects/your-project/zones/us-central1-a/instances/tf-lab08-prod"
+  "staging" = "projects/your-project/zones/us-central1-a/instances/tf-lab08-staging"
 }
 ```
 
-The `for` expression in `outputs.tf` produces a map, which is more useful than a list because you can look up by environment name.
+The `for` expression in `outputs.tf` that produces this is:
 
-### Exercise 7 — Inspect the Debug Output
-
-The configuration includes a `null_resource` that echoes the `env_map` local to stdout during apply. Check the Terraform output from Exercise 3 — you should see a line like:
-
-```
-null_resource.debug (local-exec): {"dev":{...},"prod":{...},"staging":{...}}
+```hcl
+{ for k, v in google_compute_instance.app : k => v.id }
 ```
 
-This pattern (`local-exec` + `jsonencode()`) is useful for debugging complex locals during development. Remove it before committing to production code.
+The map is more useful than a list because you can look up by environment name, not just numeric index.
 
-### Exercise 8 — Destroy
+### Exercise 7 — Splat vs `for` Expression
+
+The instances in this lab use `for_each`, not `count`. Splat syntax is not valid for `for_each` resources.
+
+Open `terraform console` and verify:
+
+```
+[for k, v in google_compute_instance.app : v.id]
+```
+
+Expected: a list of instance IDs (one per environment).
+
+Now contrast with a hypothetical count-based resource. If `google_compute_instance.app` had used `count = 3`, you could write:
+
+```hcl
+google_compute_instance.app[*].id
+```
+
+But with `for_each`, the `[*]` splat does not work as expected — use a `for` expression instead. This is an important distinction to internalise.
+
+### Exercise 8 — Inspect the Debug null_resource
+
+During the apply in Exercise 3, look back at the Terraform output. You should see a line from the `null_resource.debug` local-exec provisioner:
+
+```
+null_resource.debug (local-exec): env_map: {"dev":{...},"prod":{...},"staging":{...}}
+```
+
+This pattern — `local-exec` + `jsonencode()` — is useful for debugging complex locals during development. It prints the value of a local as JSON to stdout during `apply`. Remove it before committing production code.
+
+### Exercise 9 — Destroy
 
 ```bash
-terraform destroy -var='my_ip_cidr=0.0.0.0/0'
+terraform destroy
 ```
 
 Type `yes`. Expected:
+
 ```
 Destroy complete! Resources: X destroyed.
 ```
+
+Verify the instances are gone:
+
+```bash
+gcloud compute instances list
+```
+
+No `tf-lab08` entries should appear.
 
 ---
 
 ## Key Takeaways
 
-- **`for` expressions** are the primary tool for transforming data in Terraform. Use list form `[for ...]` when you need a list; use map form `{for ... => ...}` when you need a map.
-- **Filtering with `if`** inside a `for` expression is how you conditionally include elements.
-- **Splat (`[*]`)** only works on `count`-based resources. For `for_each` resources, use a `for` expression.
-- **`templatefile()`** externalises scripts from HCL, making them easier to edit and test. Variables are substituted at plan time.
-- **Conditional expressions** (`condition ? true_val : false_val`) drive feature flags via `count = var.enable_x ? 1 : 0`.
-- **Use `terraform console`** to test expressions interactively — it evaluates against real state and variable values without modifying anything.
-- **`locals` blocks** are the right place to compose complex derived values. Define once, reference many times.
+- `for` expressions are the primary tool for transforming data. Use list form `[for ...]` for lists and map form `{for ... => ...}` for maps.
+- Filtering with `if` inside a `for` expression conditionally excludes elements — this is how `enabled_envs` works.
+- Splat (`[*]`) only works on `count`-based resources. For `for_each` resources, always use a `for` expression.
+- `templatefile()` externalises scripts from HCL, making them easier to edit and test. Variables are substituted at plan time and the function fails fast if a variable is missing.
+- Conditional expressions (`condition ? true_val : false_val`) drive feature flags via `count = var.enable_x ? 1 : 0`.
+- Use `terraform console` to test and debug expressions interactively — it evaluates against real state and variable values without modifying anything.
+- `locals` blocks are the right place to compose derived values. Define once; reference many times.
 
 ---
 
 ## Cleanup
 
 ```bash
-terraform destroy -var='my_ip_cidr=0.0.0.0/0'
+cd lab-08-complex-expressions/terraform
+terraform destroy
 ```
 
-Verify in AWS Console that no `tf-lab08` EC2 instances remain.
+Verify in GCP Console that all resources are removed:
+
+- **Compute Engine > VM instances**: no `tf-lab08` instances
+- **Cloud Storage > Buckets**: no `tf-lab08-prod-data` bucket
+- **VPC Network > VPC networks**: no `tf-lab08-vpc`

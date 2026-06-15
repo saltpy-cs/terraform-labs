@@ -1,8 +1,10 @@
 terraform {
+  # No backend block here — bootstrap uses local state intentionally.
+  # See the README for an explanation of the bootstrapping problem.
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 6.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -11,89 +13,50 @@ terraform {
   }
 }
 
-provider "aws" {
-  region = var.aws_region
+provider "google" {
+  project = var.gcp_project
+  region  = var.gcp_region
 }
 
 # random_id appends an 8-character hex suffix to guarantee a globally unique
-# S3 bucket name. S3 bucket names share a single global namespace across all
-# AWS accounts, so collisions on common names are common.
+# GCS bucket name. GCS bucket names share a single global namespace across all
+# GCP projects, so collisions on common names are common.
 resource "random_id" "suffix" {
   byte_length = 4
 }
 
 # ---------------------------------------------------------------------------
-# S3 bucket — stores the Terraform state files
+# GCS bucket — stores the Terraform state files
+#
+# GCS provides state locking natively via conditional writes (a generation
+# check on the state object). No separate locking resource (like DynamoDB) is
+# needed — this is a key difference from the AWS S3+DynamoDB pattern.
 # ---------------------------------------------------------------------------
+resource "google_storage_bucket" "tf_state" {
+  name     = "${var.project_name}-tfstate-${random_id.suffix.hex}"
+  location = "US" # Multi-regional; higher availability than a single region
 
-resource "aws_s3_bucket" "state" {
-  bucket = "${var.project_name}-state-${random_id.suffix.hex}"
+  # Prevent Terraform from deleting the bucket (and all state files inside it)
+  # if someone accidentally runs terraform destroy on the bootstrap config.
+  force_destroy = false
 
-  # Prevent accidental deletion while state files live inside.
-  # Remove this before running terraform destroy at the end of the lab.
-  # lifecycle {
-  #   prevent_destroy = true
-  # }
+  # Uniform bucket-level access disables per-object ACLs and enforces IAM
+  # for all access control. This is the recommended setting for new buckets.
+  uniform_bucket_level_access = true
 
-  tags = {
-    Name    = "${var.project_name}-state"
-    Purpose = "terraform-state"
-    Lab     = "lab-03"
+  versioning {
+    enabled = true # Enables rolling back to a previous state file if needed
   }
-}
 
-# Versioning lets you roll back to a previous state file if something goes
-# wrong. Without versioning a bad apply could permanently overwrite state.
-resource "aws_s3_bucket_versioning" "state" {
-  bucket = aws_s3_bucket.state.id
-
-  versioning_configuration {
-    status = "Enabled"
-  }
-}
-
-# Encrypt state at rest. State files contain sensitive values (passwords,
-# private keys, etc.) so encryption is non-optional in production.
-resource "aws_s3_bucket_server_side_encryption_configuration" "state" {
-  bucket = aws_s3_bucket.state.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+  # Delete non-current (old) versions after 30 days to control storage costs.
+  # Non-current versions are older copies kept by versioning after an overwrite.
+  lifecycle_rule {
+    action {
+      type = "Delete"
     }
-  }
-}
-
-# Block all public access as an extra safety net.
-resource "aws_s3_bucket_public_access_block" "state" {
-  bucket = aws_s3_bucket.state.id
-
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
-}
-
-# ---------------------------------------------------------------------------
-# DynamoDB table — provides state locking
-# ---------------------------------------------------------------------------
-
-# DynamoDB is used for distributed locking. Terraform writes a lock item
-# before any operation that modifies state and deletes it when done.
-# The hash key MUST be named "LockID" — this is what the S3 backend expects.
-resource "aws_dynamodb_table" "locks" {
-  name         = "${var.project_name}-locks"
-  billing_mode = "PAY_PER_REQUEST" # No capacity planning needed; lock ops are infrequent
-  hash_key     = "LockID"
-
-  attribute {
-    name = "LockID"
-    type = "S"
-  }
-
-  tags = {
-    Name    = "${var.project_name}-locks"
-    Purpose = "terraform-state-locking"
-    Lab     = "lab-03"
+    condition {
+      days_since_noncurrent_time = 30
+      with_state                 = "ARCHIVED"
+    }
   }
 }

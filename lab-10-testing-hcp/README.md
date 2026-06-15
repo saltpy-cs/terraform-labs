@@ -8,7 +8,7 @@ This lab has two independent parts. You can complete each part separately.
 
 - Write `.tftest.hcl` test files using `run` and `assert` blocks
 - Use `mock_provider` to run unit tests without creating real cloud resources
-- Write integration tests that create and verify real resources
+- Write integration tests that create and verify real GCS buckets
 - Use `expect_failures` to test variable validation
 - Run targeted tests with `terraform test -filter`
 
@@ -16,11 +16,11 @@ This lab has two independent parts. You can complete each part separately.
 
 - Create an HCP Terraform workspace and configure the `cloud` backend
 - Understand remote plan and apply execution
-- Configure workspace variables (including sensitive credentials)
+- Configure workspace variables (including sensitive GCP credentials)
 - Understand how Sentinel policy-as-code enforces governance before applies
 
-**Estimated cost (Part A):** Integration tests create and immediately destroy one S3 bucket (~$0.00).
-**Estimated cost (Part B):** S3 bucket only (~$0.00). HCP Terraform free tier covers this lab.
+**Estimated cost (Part A):** Integration tests create and immediately destroy one GCS bucket (~$0.00).
+**Estimated cost (Part B):** GCS bucket only (~$0.00). HCP Terraform free tier covers this lab.
 
 ---
 
@@ -35,7 +35,7 @@ Introduced in Terraform 1.6, `terraform test` runs test files (`.tftest.hcl`) fo
 ```bash
 terraform test
 terraform test -verbose
-terraform test -filter=tests/s3_bucket_unit.tftest.hcl
+terraform test -filter=tests/gcs_bucket_unit.tftest.hcl
 ```
 
 #### Test File Structure
@@ -48,6 +48,7 @@ run "descriptive_test_name" {
 
   variables {
     bucket_name = "my-test-bucket"
+    project     = "my-gcp-project"
     environment = "dev"
   }
 
@@ -65,19 +66,19 @@ Between `run` blocks, Terraform does **not** destroy resources — state accumul
 Mock providers stub out provider API calls. No real resources are created:
 
 ```hcl
-mock_provider "aws" {}
+mock_provider "google" {}
 
 run "test_without_real_resources" {
   command = apply
 
   assert {
-    condition     = output.bucket_id != ""
-    error_message = "bucket_id should not be empty"
+    condition     = output.bucket_name != ""
+    error_message = "bucket_name should not be empty"
   }
 }
 ```
 
-With a mock provider, Terraform generates fake values for computed attributes (like `id`, `arn`). This makes tests fast and free — ideal for testing module logic, variable validation, and output computations.
+With a mock provider, Terraform generates fake values for computed attributes (like `name`, `self_link`). This makes tests fast and free — ideal for testing module logic, variable validation, and output computations.
 
 #### Testing Variable Validation
 
@@ -145,34 +146,36 @@ After adding this block, run `terraform login` then `terraform init`. Terraform 
 In HCP Terraform, variables are set in the workspace UI or via the API — not in committed `.tfvars` files. Two types:
 
 - **Terraform variables** — equivalent to `var.x` in your config
-- **Environment variables** — set in the runner's shell (used for `AWS_ACCESS_KEY_ID` etc.)
+- **Environment variables** — set in the runner's shell (used for provider credentials)
 
 Mark variables as **Sensitive** to encrypt them at rest and redact them from logs.
+
+For GCP, the provider reads credentials from the `GOOGLE_CREDENTIALS` environment variable, which should contain the JSON content of a service account key file.
 
 #### Sentinel Policy as Code
 
 Sentinel is HCP Terraform's policy engine. Policies run after a successful plan but before apply — the "soft mandatory" enforcement point.
 
-Example: require all S3 buckets to have at least one tag:
+Example: require all GCS buckets to have at least one label:
 
 ```python
 import "tfplan/v2" as tfplan
 
-# Find all S3 bucket resources in the plan
-s3_buckets = filter tfplan.resource_changes as _, rc {
-    rc.type is "aws_s3_bucket" and
+# Find all GCS bucket resources in the plan
+gcs_buckets = filter tfplan.resource_changes as _, rc {
+    rc.type is "google_storage_bucket" and
     rc.mode is "managed" and
     (rc.change.actions contains "create" or rc.change.actions contains "update")
 }
 
-# Policy: every bucket must have at least one tag
-all_buckets_tagged = rule {
-    all s3_buckets as _, bucket {
-        length(bucket.change.after.tags) > 0
+# Policy: every bucket must have at least one label
+all_buckets_labelled = rule {
+    all gcs_buckets as _, bucket {
+        length(bucket.change.after.labels) > 0
     }
 }
 
-main = rule { all_buckets_tagged }
+main = rule { all_buckets_labelled }
 ```
 
 If the policy fails, the apply is blocked until the configuration is fixed or an authorised user overrides it.
@@ -184,7 +187,8 @@ If the policy fails, the apply is blocked until the configuration is fixed or an
 ### Prerequisites
 
 - Terraform >= 1.6 installed
-- AWS CLI configured (for Part A integration tests and Part B remote apply)
+- `gcloud` CLI authenticated (`gcloud auth application-default login`)
+- A GCP project with the Cloud Storage API enabled
 - A free HCP Terraform account at app.terraform.io (Part B only)
 
 ### Directory Structure
@@ -196,14 +200,14 @@ lab-10-testing-hcp/
 │   ├── variables.tf
 │   ├── outputs.tf
 │   ├── terraform.tfvars.example
-│   └── modules/
-│       └── s3-bucket/
-│           ├── main.tf
-│           ├── variables.tf
-│           └── outputs.tf
-└── tests/
-    ├── s3_bucket_unit.tftest.hcl
-    └── s3_bucket_integration.tftest.hcl
+│   ├── modules/
+│   │   └── gcs-bucket/
+│   │       ├── main.tf
+│   │       ├── variables.tf
+│   │       └── outputs.tf
+│   └── tests/
+│       ├── gcs_bucket_unit.tftest.hcl
+│       └── gcs_bucket_integration.tftest.hcl
 ```
 
 ---
@@ -214,43 +218,49 @@ lab-10-testing-hcp/
 
 ```bash
 cd lab-10-testing-hcp/terraform
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars and set gcp_project
 terraform init
 terraform test
 ```
 
-Expected output: both test files run. Unit tests complete immediately (no real resources). Integration tests create and destroy a real S3 bucket.
+Expected output: both test files run. Unit tests complete immediately (no real resources). Integration tests create and destroy a real GCS bucket.
 
 ```
-tests/s3_bucket_integration.tftest.hcl... in progress
+tests/gcs_bucket_integration.tftest.hcl... in progress
   run "create_bucket_with_versioning"... pass
-  run "verify_bucket_exists"... pass
-tests/s3_bucket_integration.tftest.hcl... tearing down
-tests/s3_bucket_integration.tftest.hcl... pass
+  run "verify_no_drift"... pass
+tests/gcs_bucket_integration.tftest.hcl... tearing down
+tests/gcs_bucket_integration.tftest.hcl... pass
 
-tests/s3_bucket_unit.tftest.hcl... in progress
+tests/gcs_bucket_unit.tftest.hcl... in progress
   run "versioning_enabled"... pass
   run "versioning_disabled"... pass
   run "invalid_environment_rejected"... pass
-tests/s3_bucket_unit.tftest.hcl... tearing down
-tests/s3_bucket_unit.tftest.hcl... pass
+tests/gcs_bucket_unit.tftest.hcl... tearing down
+tests/gcs_bucket_unit.tftest.hcl... pass
 
 Success! 5 passed, 0 failed.
 ```
 
 ### Exercise 2 — Deliberately Break a Test
 
-Edit `terraform/modules/s3-bucket/main.tf`. Find the `aws_s3_bucket_versioning` resource and change the `status` to always be `"Suspended"` regardless of the `var.enable_versioning` value:
+Edit `terraform/modules/gcs-bucket/main.tf`. Find the `versioning` block and change it to always be disabled regardless of the `var.enable_versioning` value:
 
 ```hcl
 # Change this:
-status = var.enable_versioning ? "Enabled" : "Suspended"
+versioning {
+  enabled = var.enable_versioning
+}
 # To this (broken):
-status = "Suspended"
+versioning {
+  enabled = false
+}
 ```
 
-Re-run the tests:
+Re-run the unit tests:
 ```bash
-terraform test -filter=tests/s3_bucket_unit.tftest.hcl
+terraform test -filter=tests/gcs_bucket_unit.tftest.hcl
 ```
 
 Expected: the `versioning_enabled` test fails:
@@ -258,7 +268,7 @@ Expected: the `versioning_enabled` test fails:
   run "versioning_enabled"... fail
     Error: Test assertion failed
 
-      on tests/s3_bucket_unit.tftest.hcl line XX:
+      on tests/gcs_bucket_unit.tftest.hcl line XX:
       assert {
         condition     = output.versioning_enabled == true
         error_message = "Expected versioning to be enabled when enable_versioning=true"
@@ -270,29 +280,29 @@ Restore the original code before continuing.
 ### Exercise 3 — Verbose Mode
 
 ```bash
-terraform test -verbose -filter=tests/s3_bucket_unit.tftest.hcl
+terraform test -verbose -filter=tests/gcs_bucket_unit.tftest.hcl
 ```
 
-Observe: verbose mode shows the mock provider's generated values for computed attributes (e.g., the fake `id` and `arn` values assigned to the bucket). This helps you understand what a mock provider returns and how to write assertions against those values.
+Observe: verbose mode shows the mock provider's generated values for computed attributes (e.g., the fake `name` and `self_link` values assigned to the bucket). This helps you understand what a mock provider returns and how to write assertions against those values.
 
 ### Exercise 4 — Run Only Unit Tests
 
 ```bash
-terraform test -filter=tests/s3_bucket_unit.tftest.hcl
+terraform test -filter=tests/gcs_bucket_unit.tftest.hcl
 ```
 
-Expected: only unit tests run (no AWS API calls, completes in under 1 second).
+Expected: only unit tests run (no GCP API calls, completes in under 1 second).
 
 This is the command you would run in a pre-commit hook or fast CI job. Integration tests run separately, on a slower schedule.
 
 ### Exercise 5 — Write a New Assertion
 
-Open `tests/s3_bucket_unit.tftest.hcl`. Add a new `assert` block inside the first `run` block to verify the bucket ARN format:
+Open `tests/gcs_bucket_unit.tftest.hcl`. Add a new `assert` block inside the first `run` block to verify the bucket URL format:
 
 ```hcl
 assert {
-  condition     = startswith(output.bucket_arn, "arn:aws:s3:::")
-  error_message = "bucket_arn should start with 'arn:aws:s3:::'"
+  condition     = startswith(output.bucket_url, "gs://")
+  error_message = "bucket_url should start with 'gs://'"
 }
 ```
 
@@ -357,10 +367,26 @@ Terraform Cloud has been successfully initialized!
 
 In the HCP Terraform UI:
 1. Navigate to your workspace → **Variables**
-2. Add **Environment variables** (not Terraform variables):
-   - `AWS_ACCESS_KEY_ID` = your AWS access key (mark as **Sensitive**)
-   - `AWS_SECRET_ACCESS_KEY` = your AWS secret key (mark as **Sensitive**)
-   - `AWS_DEFAULT_REGION` = `us-east-1`
+2. Add an **Environment variable**:
+   - `GOOGLE_CREDENTIALS` = the full JSON content of a GCP service account key file (mark as **Sensitive**)
+
+   To generate a service account key:
+   ```bash
+   gcloud iam service-accounts create tf-lab10-runner \
+     --display-name "Terraform Lab 10 Runner"
+
+   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+     --member "serviceAccount:tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+     --role "roles/storage.admin"
+
+   gcloud iam service-accounts keys create key.json \
+     --iam-account tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com
+
+   cat key.json  # copy this entire JSON as the variable value
+   ```
+
+3. Add a **Terraform variable**:
+   - `gcp_project` = your GCP project ID
 
 These variables are stored encrypted and injected into the remote runner environment. They never appear in your git repository or plan output.
 
@@ -386,27 +412,27 @@ Open that URL in your browser to see the full plan output, including any Sentine
 
 In the HCP Terraform UI, navigate to your organisation → **Policy Sets** → **New Policy Set**.
 
-Create a Sentinel policy with the following code that requires all S3 buckets to have at least one tag:
+Create a Sentinel policy that requires all GCS buckets to have at least one label:
 
 ```python
 import "tfplan/v2" as tfplan
 
-s3_buckets = filter tfplan.resource_changes as _, rc {
-    rc.type is "aws_s3_bucket" and
+gcs_buckets = filter tfplan.resource_changes as _, rc {
+    rc.type is "google_storage_bucket" and
     rc.mode is "managed" and
     (rc.change.actions contains "create" or rc.change.actions contains "update")
 }
 
-all_buckets_tagged = rule {
-    all s3_buckets as _, bucket {
-        length(keys(lookup(bucket.change.after, "tags", {}))) > 0
+all_buckets_labelled = rule {
+    all gcs_buckets as _, bucket {
+        length(keys(lookup(bucket.change.after, "labels", {}))) > 0
     }
 }
 
-main = rule { all_buckets_tagged }
+main = rule { all_buckets_labelled }
 ```
 
-Apply the policy set to your workspace. Run `terraform plan` again — observe the Sentinel check in the run output.
+Apply the policy set to your workspace. Run `terraform plan` again — observe the Sentinel check in the run output. Because the module always merges in `environment` and `managed_by` labels, this policy should pass.
 
 ### Exercise 12 — Destroy
 
@@ -432,10 +458,10 @@ Destroy complete! Resources: X destroyed.
 
 **HCP Terraform:**
 - **Remote execution** moves plans and applies off your laptop onto consistent, auditable infrastructure.
-- **Workspace variables** are the right place for secrets. Never commit `AWS_ACCESS_KEY_ID` to a `.tfvars` file in git.
+- **Workspace variables** are the right place for secrets. Set `GOOGLE_CREDENTIALS` as a sensitive environment variable in HCP Terraform — never commit service account keys to a `.tfvars` file in git.
 - **The `cloud` block** is the modern replacement for the `remote` backend. One block connects your config to an HCP Terraform workspace.
-- **Sentinel** enforces governance between plan and apply — it is the policy-as-code layer for the Professional exam. Policies can be advisory (warn) or mandatory (block).
-- **State is stored encrypted in HCP Terraform** — no S3 bucket to manage for remote state.
+- **Sentinel** enforces governance between plan and apply — it is the policy-as-code layer for the Professional exam. Policies can be advisory (warn) or mandatory (block). Sentinel itself is provider-agnostic: it inspects the plan data regardless of whether you are using GCP, AWS, or Azure resources.
+- **State is stored encrypted in HCP Terraform** — no GCS bucket to manage for remote state.
 
 ---
 
@@ -443,8 +469,8 @@ Destroy complete! Resources: X destroyed.
 
 **Part A:**
 ```bash
-# Tests clean up automatically. Verify no S3 buckets remain:
-aws s3 ls | grep tf-lab10
+# Tests clean up automatically. Verify no GCS buckets remain:
+gsutil ls | grep tf-lab10
 ```
 
 **Part B:**
@@ -452,4 +478,13 @@ aws s3 ls | grep tf-lab10
 terraform destroy
 ```
 
-In HCP Terraform UI: optionally delete the workspace and organisation if no longer needed.
+In the HCP Terraform UI: optionally delete the workspace and organisation if no longer needed.
+
+If you created a service account key for Exercise 9, delete it:
+```bash
+# List keys and delete
+gcloud iam service-accounts keys list \
+  --iam-account tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com
+gcloud iam service-accounts keys delete KEY_ID \
+  --iam-account tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com
+```

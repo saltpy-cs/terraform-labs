@@ -56,23 +56,23 @@ null_resource.app[1]
 
 ---
 
-## Question 3 — Remote S3 Backend (8 points) — Associate
+## Question 3 — Remote GCS Backend (8 points) — Associate
 
-**Objective:** Configure a remote state backend using S3.
+**Objective:** Configure a remote state backend using Google Cloud Storage.
 
-The name of the pre-provisioned S3 bucket is in `/tmp/practice-bucket-name.txt`.
+The name of the pre-provisioned GCS bucket is in `/tmp/practice-bucket-name.txt`.
 
 In `~/tf-practice/q03/`, write a Terraform configuration that:
-1. Configures an `s3` backend using the bucket whose name is in `/tmp/practice-bucket-name.txt`, with key `practice/q03.tfstate` and region `us-east-1`.
+1. Configures a `gcs` backend using the bucket whose name is in `/tmp/practice-bucket-name.txt`, with prefix `practice/q03`.
 2. Declares the `hashicorp/null` provider and at least one `null_resource`.
 3. Runs `terraform init` (you will need to confirm the backend migration if any local state exists) and `terraform apply -auto-approve` successfully.
 
 **Verification:**
 ```bash
 BUCKET=$(cat /tmp/practice-bucket-name.txt)
-aws s3 ls "s3://${BUCKET}/practice/"
+gsutil ls "gs://${BUCKET}/practice/"
 ```
-Expected: a line showing `q03.tfstate`.
+Expected: a line showing a state file under `practice/q03/`.
 
 ---
 
@@ -80,19 +80,19 @@ Expected: a line showing `q03.tfstate`.
 
 **Objective:** Use a data source to look up existing infrastructure and expose its attributes as an output.
 
-The ID of the pre-provisioned VPC is in `/tmp/practice-vpc-id.txt`.
+A VPC network named `practice-vpc` was created by the setup script. Its self_link is in `/tmp/practice-vpc-selflink.txt`.
 
 In `~/tf-practice/q04/`, write a Terraform configuration that:
-1. Declares the `hashicorp/aws` provider for region `us-east-1`.
-2. Uses a `data "aws_vpc"` data source that looks up the VPC by filtering on its ID (use the value from `/tmp/practice-vpc-id.txt` — you may hard-code it or read it with `file()`).
-3. Declares an output named `vpc_cidr` whose value is the CIDR block of the looked-up VPC.
+1. Declares the `hashicorp/google` provider.
+2. Uses a `data "google_compute_network"` data source that looks up the network by name (`"practice-vpc"`). You must supply the `project` argument — use a variable or hard-code your project ID.
+3. Declares an output named `vpc_self_link` whose value is the `self_link` attribute of the looked-up network.
 
 **Verification:**
 ```bash
 cd ~/tf-practice/q04
-terraform output vpc_cidr
+terraform output vpc_self_link
 ```
-Expected: a valid CIDR block string (e.g., `"172.31.0.0/16"`).
+Expected: a string matching the value in `/tmp/practice-vpc-selflink.txt`.
 
 ---
 
@@ -102,24 +102,24 @@ Expected: a valid CIDR block string (e.g., `"172.31.0.0/16"`).
 
 Write a module at `~/tf-practice/q05/modules/tagger/` that:
 - Accepts three input variables: `resource_name` (string), `environment` (string), `team` (string).
-- Outputs a value named `tags` that is a `map(string)` containing at minimum:
-  - `Name` = `var.resource_name`
-  - `Environment` = `var.environment`
-  - `Team` = `var.team`
-  - `ManagedBy` = `"Terraform"`
+- Outputs a value named `labels` that is a `map(string)` containing at minimum:
+  - `name` = `var.resource_name`
+  - `environment` = `var.environment`
+  - `team` = `var.team`
+  - `managed_by` = `"terraform"`
 
 In the root configuration at `~/tf-practice/q05/`:
 - Declare the `hashicorp/null` provider.
 - Call the `tagger` module with `resource_name = "web-server"`, `environment = "prod"`, `team = "platform"`.
-- Create a `null_resource` named `example` with a `triggers` block that includes all entries from the module's `tags` output (use the spread-into-triggers pattern).
-- Declare an output named `tags` whose value is the module's `tags` output.
+- Create a `null_resource` named `example` with a `triggers` block that includes all entries from the module's `labels` output (use the spread-into-triggers pattern).
+- Declare an output named `labels` whose value is the module's `labels` output.
 
 **Verification:**
 ```bash
 cd ~/tf-practice/q05
-terraform output tags
+terraform output labels
 ```
-Expected: a map containing at minimum `Name`, `Environment`, `Team`, and `ManagedBy` keys.
+Expected: a map containing at minimum `name`, `environment`, `team`, and `managed_by` keys.
 
 ---
 
@@ -132,32 +132,30 @@ In `~/tf-practice/q06/`:
 Write a `variables.tf` that declares a variable named `servers` of type:
 ```hcl
 map(object({
-  instance_type = string
-  port          = number
+  machine_type = string
+  zone         = string
 }))
 ```
-with a default of:
+with a default of at least two entries, for example:
 ```hcl
 {
-  web = { instance_type = "t3.micro", port = 80 }
-  api = { instance_type = "t3.small", port = 8080 }
-  db  = { instance_type = "t3.medium", port = 5432 }
+  web = { machine_type = "e2-micro",  zone = "us-central1-a" }
+  api = { machine_type = "e2-small",  zone = "us-central1-b" }
 }
 ```
 
 Write a `main.tf` that:
 - Declares the `hashicorp/null` provider.
-- Creates `null_resource` resources using `for_each` over `var.servers`. Name the resource block `server`. Each resource should have a `triggers` block with `instance_type` and `port` from the map values.
+- Creates `null_resource` resources using `for_each` over `var.servers`. Name the resource block `server`. Each resource should have a `triggers` block with `machine_type` and `zone` from the map values.
 
 **Verification:**
 ```bash
 cd ~/tf-practice/q06
 terraform state list
 ```
-Expected (three lines, order may vary):
+Expected (one line per map entry, order may vary):
 ```
 null_resource.server["api"]
-null_resource.server["db"]
 null_resource.server["web"]
 ```
 
@@ -167,25 +165,27 @@ null_resource.server["web"]
 
 **Objective:** Use the `templatefile()` built-in function to render a template.
 
-The file `~/tf-practice/q07/template.txt.tpl` already exists with the following content:
+The file `~/tf-practice/q07/startup.sh.tpl` already exists with the following content:
 ```
-Hello, ${name}! You are in ${region}.
+#!/bin/bash
+ENV="${env}"
+PROJECT="${project}"
+echo "Running ${project} in ${env}"
 ```
 
 In `~/tf-practice/q07/`, write a Terraform configuration that:
-1. Declares the `hashicorp/aws` provider for region `us-east-1`.
-2. Uses `data "aws_region" "current" {}` to retrieve the current AWS region.
-3. In a `locals` block, uses `templatefile()` to render `template.txt.tpl` with:
-   - `name = "Terraform"`
-   - `region = data.aws_region.current.name`
-4. Declares an output named `rendered` whose value is the rendered string from locals.
+1. Declares the `hashicorp/null` provider (no cloud provider is needed for this question).
+2. In a `locals` block, uses `templatefile()` to render `startup.sh.tpl` with:
+   - `env = "production"`
+   - `project = "my-app"`
+3. Declares an output named `rendered_script` whose value is the rendered string from locals.
 
 **Verification:**
 ```bash
 cd ~/tf-practice/q07
-terraform output rendered
+terraform output rendered_script
 ```
-Expected: `"Hello, Terraform! You are in us-east-1."`
+Expected: the rendered script string containing `"Running my-app in production"`.
 
 ---
 
@@ -197,38 +197,41 @@ In `~/tf-practice/q08/`:
 
 Write a configuration that:
 1. Declares the `hashicorp/null` provider.
-2. Defines a variable named `allowed_cidrs` of type `list(string)` with a default of `["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]`.
-3. In a `locals` block, uses a `for` expression to transform `var.allowed_cidrs` into a `list(object({ cidr = string, description = string }))` where `description = "Allow from ${cidr}"` for each entry.
-4. Declares an output named `cidr_objects` whose value is the transformed list from locals.
+2. Defines a variable named `allowed_ips` of type `list(string)` with a default of `["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]`.
+3. In a `locals` block, uses a `for` expression to transform `var.allowed_ips` into a `list(object({ cidr = string, description = string }))` where `description = "Allow traffic from ${cidr}"` for each entry.
+4. Declares an output named `ip_objects` whose value is the transformed list from locals.
 
 **Verification:**
 ```bash
 cd ~/tf-practice/q08
-terraform output cidr_objects
+terraform output ip_objects
 ```
-Expected: a list of three objects. Each object must have a `cidr` and a `description` field where `description` equals `"Allow from <cidr>"`.
+Expected: a list of three objects. Each object must have a `cidr` and a `description` field where `description` equals `"Allow traffic from <cidr>"`.
 
 ---
 
 ## Question 9 — terraform import (10 points) — Associate+
 
-**Objective:** Bring an existing resource under Terraform management using `terraform import`.
+**Objective:** Bring an existing GCS bucket under Terraform management using `terraform import`.
 
-The name of a pre-existing S3 bucket is in `/tmp/practice-import-bucket.txt`.
+The name of a pre-existing GCS bucket is in `/tmp/practice-import-bucket.txt`.
 
 In `~/tf-practice/q09/`:
-1. Declare the `hashicorp/aws` provider for region `us-east-1`.
-2. Write a `resource "aws_s3_bucket" "imported"` block. At minimum it must contain a `bucket` argument set to the bucket name from `/tmp/practice-import-bucket.txt`. (Do not set arguments that would conflict with the existing bucket's configuration — keep the block minimal.)
+1. Declare the `hashicorp/google` provider with your project set.
+2. Write a `resource "google_storage_bucket" "imported"` block. At minimum it must contain a `name` argument set to the bucket name from `/tmp/practice-import-bucket.txt` and a `location` argument matching the bucket's region (the setup creates it in `US-CENTRAL1`). Keep the block minimal.
 3. Run `terraform init`.
-4. Run `terraform import aws_s3_bucket.imported <bucket-name>` using the name from the file.
+4. Run `terraform import google_storage_bucket.imported <bucket-name>` using the name from the file.
+
+> Note: the import ID for a GCS bucket is simply the bucket name — not an ARN or a project-prefixed path.
+
 5. Run `terraform plan` — it should show no changes needed (or only ignorable drift). If there are conflicting attributes, adjust the resource block to match.
 
 **Verification:**
 ```bash
 cd ~/tf-practice/q09
-terraform state show aws_s3_bucket.imported
+terraform state show google_storage_bucket.imported
 ```
-Expected: output showing the bucket's attributes (ARN, bucket name, region, etc.).
+Expected: output showing the bucket's attributes (name, location, project, etc.).
 
 ---
 
@@ -261,19 +264,19 @@ Each should show `null_resource.env_marker` in its own state.
 
 ## Question 11 — terraform test (6 points) — Professional
 
-**Objective:** Write a `terraform test` file that validates a module using a mock provider.
+**Objective:** Write a `terraform test` file that validates a module's output.
 
-Write a module at `~/tf-practice/q11/modules/namer/` that:
-- Accepts two input variables: `prefix` (string) and `suffix` (string).
-- Outputs a value named `full_name` whose value is `"${var.prefix}-${var.suffix}"`.
-- Requires no provider (use `terraform { required_providers {} }` or omit the block entirely).
+Write a module at `~/tf-practice/q11/modules/labeler/` that:
+- Accepts two input variables: `prefix` (string) and `env` (string).
+- Creates a `null_resource` named `marker` with a trigger `label = "${var.prefix}-${var.env}"`.
+- Outputs a value named `full_label` whose value is `"${var.prefix}-${var.env}"`.
 
 Write a test file at `~/tf-practice/q11/tests/validate.tftest.hcl` that:
-- Uses a `mock_provider` block for `null` (even if the module needs no provider, declare one to demonstrate the syntax — or omit if the module truly needs none).
-- Contains a `run` block named `"name_is_correct"` that:
-  - Calls the namer module (set `module` in the run block, or use `command = plan` against a root config).
-  - Passes `prefix = "app"` and `suffix = "prod"` as input variables.
-  - Asserts that `output.full_name == "app-prod"`.
+- Declares a `mock_provider "null" {}` block.
+- Contains a `run` block named `"label_is_correct"` that:
+  - Calls the labeler module.
+  - Passes `prefix = "app"` and `env = "prod"` as input variables.
+  - Asserts that `output.full_label == "app-prod"`.
 
 From `~/tf-practice/q11/`, run:
 ```bash
@@ -329,7 +332,7 @@ tolist([
 |---|----------|--------|-----------|
 | 1 | Local file resource | 8 | [ ] |
 | 2 | Variables, validation, count | 8 | [ ] |
-| 3 | Remote S3 backend | 8 | [ ] |
+| 3 | Remote GCS backend | 8 | [ ] |
 | 4 | Data source and output | 8 | [ ] |
 | 5 | Writing and calling a module | 10 | [ ] |
 | 6 | for_each with map of objects | 10 | [ ] |
@@ -431,7 +434,7 @@ terraform state list
 
 ---
 
-### Solution — Q3: Remote S3 Backend
+### Solution — Q3: Remote GCS Backend
 
 **`~/tf-practice/q03/main.tf`**
 ```hcl
@@ -443,10 +446,9 @@ terraform {
     }
   }
 
-  backend "s3" {
+  backend "gcs" {
     bucket = "<paste-bucket-name-here>"   # value from /tmp/practice-bucket-name.txt
-    key    = "practice/q03.tfstate"
-    region = "us-east-1"
+    prefix = "practice/q03"
   }
 }
 
@@ -459,16 +461,14 @@ resource "null_resource" "q03" {}
 
 Alternative using partial backend configuration:
 
-**`~/tf-practice/q03/main.tf`** (backend block omitted — use `-backend-config`)
 ```hcl
 terraform {
   required_providers {
     null = { source = "hashicorp/null", version = ">= 3.0" }
   }
 
-  backend "s3" {
-    key    = "practice/q03.tfstate"
-    region = "us-east-1"
+  backend "gcs" {
+    prefix = "practice/q03"
   }
 }
 
@@ -479,7 +479,7 @@ resource "null_resource" "q03" {}
 BUCKET=$(cat /tmp/practice-bucket-name.txt)
 terraform init -backend-config="bucket=${BUCKET}"
 terraform apply -auto-approve
-aws s3 ls "s3://${BUCKET}/practice/"
+gsutil ls "gs://${BUCKET}/practice/"
 ```
 
 ---
@@ -490,34 +490,40 @@ aws s3 ls "s3://${BUCKET}/practice/"
 ```hcl
 terraform {
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 6.0"
     }
   }
 }
 
-provider "aws" {
-  region = "us-east-1"
+variable "gcp_project" {
+  type = string
 }
 
-data "aws_vpc" "practice" {
-  id = file("/tmp/practice-vpc-id.txt")
+provider "google" {
+  project = var.gcp_project
 }
 
-output "vpc_cidr" {
-  value = data.aws_vpc.practice.cidr_block
+data "google_compute_network" "practice" {
+  name    = "practice-vpc"
+  project = var.gcp_project
+}
+
+output "vpc_self_link" {
+  value = data.google_compute_network.practice.self_link
 }
 ```
 
-> `file()` reads `/tmp/practice-vpc-id.txt` at plan time. If the file contains a trailing
-> newline, use `trimspace(file("/tmp/practice-vpc-id.txt"))`.
+> `data "google_compute_network"` requires the `project` argument — it will not fall back
+> to the provider default for data source lookups. Pass your project ID via `-var` or a
+> `terraform.tfvars` file.
 
 ```bash
 cd ~/tf-practice/q04
 terraform init
-terraform apply -auto-approve
-terraform output vpc_cidr
+terraform apply -auto-approve -var="gcp_project=<your-project-id>"
+terraform output vpc_self_link
 ```
 
 ---
@@ -541,12 +547,12 @@ variable "team" {
 
 **`~/tf-practice/q05/modules/tagger/outputs.tf`**
 ```hcl
-output "tags" {
+output "labels" {
   value = {
-    Name        = var.resource_name
-    Environment = var.environment
-    Team        = var.team
-    ManagedBy   = "Terraform"
+    name        = var.resource_name
+    environment = var.environment
+    team        = var.team
+    managed_by  = "terraform"
   }
 }
 ```
@@ -571,11 +577,11 @@ module "tagger" {
 }
 
 resource "null_resource" "example" {
-  triggers = module.tagger.tags
+  triggers = module.tagger.labels
 }
 
-output "tags" {
-  value = module.tagger.tags
+output "labels" {
+  value = module.tagger.labels
 }
 ```
 
@@ -583,7 +589,7 @@ output "tags" {
 cd ~/tf-practice/q05
 terraform init
 terraform apply -auto-approve
-terraform output tags
+terraform output labels
 ```
 
 ---
@@ -594,14 +600,13 @@ terraform output tags
 ```hcl
 variable "servers" {
   type = map(object({
-    instance_type = string
-    port          = number
+    machine_type = string
+    zone         = string
   }))
 
   default = {
-    web = { instance_type = "t3.micro",  port = 80   }
-    api = { instance_type = "t3.small",  port = 8080 }
-    db  = { instance_type = "t3.medium", port = 5432 }
+    web = { machine_type = "e2-micro", zone = "us-central1-a" }
+    api = { machine_type = "e2-small", zone = "us-central1-b" }
   }
 }
 ```
@@ -621,8 +626,8 @@ resource "null_resource" "server" {
   for_each = var.servers
 
   triggers = {
-    instance_type = each.value.instance_type
-    port          = tostring(each.value.port)
+    machine_type = each.value.machine_type
+    zone         = each.value.zone
   }
 }
 ```
@@ -642,41 +647,38 @@ terraform state list
 ```hcl
 terraform {
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
+    null = {
+      source  = "hashicorp/null"
+      version = ">= 3.0"
     }
   }
 }
 
-provider "aws" {
-  region = "us-east-1"
-}
-
-data "aws_region" "current" {}
-
 locals {
-  rendered = templatefile("${path.module}/template.txt.tpl", {
-    name   = "Terraform"
-    region = data.aws_region.current.name
+  rendered_script = templatefile("${path.module}/startup.sh.tpl", {
+    env     = "production"
+    project = "my-app"
   })
 }
 
-output "rendered" {
-  value = local.rendered
+output "rendered_script" {
+  value = local.rendered_script
 }
 ```
 
-The template file (`template.txt.tpl`) was created by the setup configuration:
+The template file (`startup.sh.tpl`) was created by the setup configuration:
 ```
-Hello, ${name}! You are in ${region}.
+#!/bin/bash
+ENV="${env}"
+PROJECT="${project}"
+echo "Running ${project} in ${env}"
 ```
 
 ```bash
 cd ~/tf-practice/q07
 terraform init
 terraform apply -auto-approve
-terraform output rendered
+terraform output rendered_script
 ```
 
 ---
@@ -694,22 +696,22 @@ terraform {
   }
 }
 
-variable "allowed_cidrs" {
+variable "allowed_ips" {
   type    = list(string)
   default = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
 }
 
 locals {
-  cidr_objects = [
-    for cidr in var.allowed_cidrs : {
+  ip_objects = [
+    for cidr in var.allowed_ips : {
       cidr        = cidr
-      description = "Allow from ${cidr}"
+      description = "Allow traffic from ${cidr}"
     }
   ]
 }
 
-output "cidr_objects" {
-  value = local.cidr_objects
+output "ip_objects" {
+  value = local.ip_objects
 }
 ```
 
@@ -717,7 +719,7 @@ output "cidr_objects" {
 cd ~/tf-practice/q08
 terraform init
 terraform apply -auto-approve
-terraform output cidr_objects
+terraform output ip_objects
 ```
 
 ---
@@ -728,19 +730,25 @@ terraform output cidr_objects
 ```hcl
 terraform {
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 5.0"
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 6.0"
     }
   }
 }
 
-provider "aws" {
-  region = "us-east-1"
+variable "gcp_project" {
+  type = string
 }
 
-resource "aws_s3_bucket" "imported" {
-  bucket = "<paste-bucket-name-here>"   # value from /tmp/practice-import-bucket.txt
+provider "google" {
+  project = var.gcp_project
+}
+
+resource "google_storage_bucket" "imported" {
+  name     = "<paste-bucket-name-here>"   # value from /tmp/practice-import-bucket.txt
+  location = "US-CENTRAL1"
+  project  = var.gcp_project
 }
 ```
 
@@ -748,23 +756,15 @@ resource "aws_s3_bucket" "imported" {
 IMPORT_BUCKET=$(cat /tmp/practice-import-bucket.txt)
 cd ~/tf-practice/q09
 terraform init
-terraform import aws_s3_bucket.imported "${IMPORT_BUCKET}"
-terraform state show aws_s3_bucket.imported
+terraform import -var="gcp_project=<your-project-id>" \
+  google_storage_bucket.imported "${IMPORT_BUCKET}"
+terraform state show google_storage_bucket.imported
 ```
 
-After import, run `terraform plan`. If there are drift warnings (e.g., tags, versioning),
-add the corresponding arguments to the resource block to match the existing state or use
-`ignore_changes` in a `lifecycle` block:
-
-```hcl
-resource "aws_s3_bucket" "imported" {
-  bucket = "<bucket-name>"
-
-  lifecycle {
-    ignore_changes = all
-  }
-}
-```
+> The import ID for a `google_storage_bucket` is the bucket name alone — not an ARN or
+> a project-prefixed path. After import, run `terraform plan` and adjust the resource
+> block if there are drift warnings (e.g., `uniform_bucket_level_access`). Use a
+> `lifecycle { ignore_changes = all }` block if you want to silence all drift.
 
 ---
 
@@ -819,42 +819,55 @@ terraform state list     # independent state
 
 ### Solution — Q11: terraform test
 
-**`~/tf-practice/q11/modules/namer/main.tf`**
+**`~/tf-practice/q11/modules/labeler/main.tf`**
 ```hcl
 terraform {
-  # No provider needed — this module only computes values
+  required_providers {
+    null = {
+      source  = "hashicorp/null"
+      version = ">= 3.0"
+    }
+  }
 }
 
 variable "prefix" {
   type = string
 }
 
-variable "suffix" {
+variable "env" {
   type = string
 }
 
-output "full_name" {
-  value = "${var.prefix}-${var.suffix}"
+resource "null_resource" "marker" {
+  triggers = {
+    label = "${var.prefix}-${var.env}"
+  }
+}
+
+output "full_label" {
+  value = "${var.prefix}-${var.env}"
 }
 ```
 
 **`~/tf-practice/q11/tests/validate.tftest.hcl`**
 ```hcl
-run "name_is_correct" {
+mock_provider "null" {}
+
+run "label_is_correct" {
   command = plan
 
   module {
-    source = "../modules/namer"
+    source = "../modules/labeler"
   }
 
   variables {
     prefix = "app"
-    suffix = "prod"
+    env    = "prod"
   }
 
   assert {
-    condition     = output.full_name == "app-prod"
-    error_message = "Expected full_name to be 'app-prod', got '${output.full_name}'"
+    condition     = output.full_label == "app-prod"
+    error_message = "Expected full_label to be 'app-prod', got '${output.full_label}'"
   }
 }
 ```
@@ -868,15 +881,14 @@ terraform test
 Expected output:
 ```
 tests/validate.tftest.hcl... pass
-  run "name_is_correct"... pass
+  run "label_is_correct"... pass
 
 Success! 1 passed, 0 failed.
 ```
 
-> Note: `terraform test` looks for test files in `tests/` by default. The module source
-> is a relative path from the test file's location, but Terraform resolves it relative to
-> the root module directory — so `"../modules/namer"` from the root `q11/` directory means
-> `modules/namer`. If Terraform can't find it, try `source = "./modules/namer"`.
+> The `mock_provider "null" {}` block stubs out the null provider so the test does not
+> require a real provider configuration. The `module` block in the `run` stanza points
+> to the module under test using a path relative to the root module directory.
 
 ---
 
@@ -933,6 +945,5 @@ tolist([
 ```
 
 > Map iteration in Terraform is ordered lexicographically by key, so `api` will always
-> appear before `web`. If the question requires a sorted list (as shown), the output
-> is deterministic. If you need explicit sorting, use `sort()`:
+> appear before `web`. If you need explicit sorting, wrap with `sort()`:
 > `value = sort(local.connection_strings)`.

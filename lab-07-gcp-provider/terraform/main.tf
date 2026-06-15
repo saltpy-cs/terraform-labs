@@ -4,40 +4,54 @@ resource "random_id" "suffix" {
 }
 
 locals {
-  name_prefix = "${var.bucket_name_prefix}-${random_id.suffix.hex}"
+  name_prefix = "${var.project_name}-${random_id.suffix.hex}"
 }
 
-# ─── GCS Bucket (primary, us-central1) ────────────────────────────────────────
+# ─── Service Account ──────────────────────────────────────────────────────────
+# Service accounts are both a principal (they can be granted roles) and an
+# identity (applications authenticate as them, e.g., GCE instances).
 
-resource "google_storage_bucket" "main" {
+resource "google_service_account" "app" {
+  account_id   = "${var.project_name}-sa"
+  display_name = "Lab 07 Application Service Account"
+  description  = "Managed by Terraform — lab-07-gcp-provider"
+}
+
+# ─── Project-level IAM (additive) ─────────────────────────────────────────────
+# google_project_iam_member is ADDITIVE: it adds one principal:role pair.
+# It does not affect any other bindings, including manually-added ones.
+# This is the safest approach for project-level IAM in shared environments.
+
+resource "google_project_iam_member" "app_storage_viewer" {
+  project = var.gcp_project
+  role    = "roles/storage.objectViewer"
+  member  = "serviceAccount:${google_service_account.app.email}"
+}
+
+# ─── GCS Bucket (US, default provider) ───────────────────────────────────────
+
+resource "google_storage_bucket" "us" {
   name          = "${local.name_prefix}-us"
   location      = "US"
   storage_class = "STANDARD"
 
   # force_destroy = true allows `terraform destroy` to delete the bucket even
-  # if it contains objects. Without this, GCP returns a 409 error.
+  # if it contains objects. Without this flag GCP returns a 409 error.
   force_destroy = true
 
   # uniform_bucket_level_access disables per-object ACLs and enforces IAM-only
-  # access control — the current GCP best practice.
+  # access — the current GCP best practice.
   uniform_bucket_level_access = true
 
   labels = {
-    managed_by  = "terraform"
-    environment = "lab"
+    managed_by = "terraform"
+    lab        = "07"
+    region     = "us"
   }
 }
 
-# ─── GCS Bucket IAM — grant Storage Object Viewer to a service account ────────
-
-resource "google_storage_bucket_iam_member" "viewer" {
-  bucket = google_storage_bucket.main.name
-  role   = "roles/storage.objectViewer"
-  member = "serviceAccount:${var.service_account_email}"
-}
-
-# ─── GCS Bucket (Europe) — uses the aliased provider ─────────────────────────
-# Note the explicit `provider = google.europe` reference.
+# ─── GCS Bucket (Europe, aliased provider) ────────────────────────────────────
+# Note the explicit `provider = google.europe`.
 # This bucket is created via the europe-west1 provider instance.
 
 resource "google_storage_bucket" "europe" {
@@ -51,37 +65,53 @@ resource "google_storage_bucket" "europe" {
   uniform_bucket_level_access = true
 
   labels = {
-    managed_by  = "terraform"
-    environment = "lab"
-    region      = "europe"
+    managed_by = "terraform"
+    lab        = "07"
+    region     = "europe"
   }
+}
+
+# ─── Resource-level IAM ───────────────────────────────────────────────────────
+# Prefer resource-level IAM (e.g., google_storage_bucket_iam_member) over
+# project-level IAM when possible — it follows least-privilege more closely.
+# Here we grant var.your_user_email Storage Object Viewer on the US bucket only.
+
+resource "google_storage_bucket_iam_member" "user_access" {
+  bucket = google_storage_bucket.us.name
+  role   = "roles/storage.objectViewer"
+  member = "user:${var.your_user_email}"
+}
+
+# ─── Service Account Key ──────────────────────────────────────────────────────
+# Generates a JSON key for the service account. The private_key output is
+# base64-encoded. In production, prefer Workload Identity Federation over SA keys.
+
+resource "google_service_account_key" "app_key" {
+  service_account_id = google_service_account.app.name
 }
 
 # ─── VPC Network ──────────────────────────────────────────────────────────────
 # GCP VPCs are global — a single VPC spans all regions.
-# auto_create_subnetworks = false means we manage subnets explicitly (custom mode).
 
 resource "google_compute_network" "main" {
-  name                    = "${var.bucket_name_prefix}-vpc"
+  name                    = "${var.project_name}-vpc"
   auto_create_subnetworks = false
   description             = "Lab 07 VPC — managed by Terraform"
 }
 
 # ─── Subnet ───────────────────────────────────────────────────────────────────
-# GCP subnets are regional (span all zones within a region).
-# An instance in us-central1-a attaches to this us-central1 subnet.
 
 resource "google_compute_subnetwork" "main" {
-  name          = "${var.bucket_name_prefix}-subnet"
+  name          = "${var.project_name}-subnet"
   ip_cidr_range = "10.0.1.0/24"
   region        = var.gcp_region
   network       = google_compute_network.main.id
 }
 
-# ─── Firewall — allow SSH ─────────────────────────────────────────────────────
+# ─── Firewall ─────────────────────────────────────────────────────────────────
 
 resource "google_compute_firewall" "allow_ssh" {
-  name    = "${var.bucket_name_prefix}-allow-ssh"
+  name    = "${var.project_name}-allow-ssh"
   network = google_compute_network.main.name
 
   allow {
@@ -89,39 +119,45 @@ resource "google_compute_firewall" "allow_ssh" {
     ports    = ["22"]
   }
 
-  # Restrict to your IP in production. "0.0.0.0/0" is acceptable for a lab.
   source_ranges = ["0.0.0.0/0"]
-
-  target_tags = ["tf-lab07-web"]
+  target_tags   = ["${var.project_name}-app"]
 }
 
-# ─── GCE Instance (e2-micro, us-central1-a, free tier) ───────────────────────
+# ─── Debian image ─────────────────────────────────────────────────────────────
 
 data "google_compute_image" "debian" {
   family  = "debian-12"
   project = "debian-cloud"
 }
 
-resource "google_compute_instance" "web" {
-  name         = "${var.bucket_name_prefix}-web"
+# ─── GCE Instance (e2-micro, free tier) ──────────────────────────────────────
+# The service_account block attaches the SA we created above.
+# scopes = ["cloud-platform"] grants the instance all roles the SA has — the SA's
+# IAM bindings (not the scopes) determine what APIs the instance can actually call.
+
+resource "google_compute_instance" "app" {
+  name         = "${var.project_name}-app"
   machine_type = "e2-micro"
   zone         = var.gcp_zone
 
-  tags = ["tf-lab07-web"]
+  tags = ["${var.project_name}-app"]
 
   boot_disk {
     initialize_params {
       image = data.google_compute_image.debian.self_link
-      size  = 10 # GB — minimum disk size
+      size  = 10
     }
   }
 
   network_interface {
     subnetwork = google_compute_subnetwork.main.id
-
-    # access_config block with no attributes assigns an ephemeral external IP.
-    # Omit this block entirely for a private-only instance.
     access_config {}
+  }
+
+  # Attach the service account so the instance authenticates as google_service_account.app
+  service_account {
+    email  = google_service_account.app.email
+    scopes = ["cloud-platform"]
   }
 
   metadata = {
@@ -129,10 +165,18 @@ resource "google_compute_instance" "web" {
     lab        = "07-gcp-provider"
   }
 
-  # Minimal startup script
   metadata_startup_script = <<-EOT
     #!/bin/bash
     apt-get update -y
     echo "Lab 07 instance ready" > /tmp/lab07.txt
   EOT
+}
+
+# ─── http data source (multi-provider demo, no auth needed) ───────────────────
+# The http provider fetches a URL at plan/apply time and returns the response body.
+# This demonstrates that a Terraform config can use multiple providers simultaneously.
+# Note: only works when Terraform has outbound internet access.
+
+data "http" "metadata" {
+  url = "https://ifconfig.me"
 }

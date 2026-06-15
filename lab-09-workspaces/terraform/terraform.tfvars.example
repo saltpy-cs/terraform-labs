@@ -1,3 +1,5 @@
-aws_region   = "us-east-1"
+gcp_project  = "your-gcp-project-id"
+gcp_region   = "us-central1"
+gcp_zone     = "us-central1-a"
 project_name = "tf-lab09"
-state_bucket = "tf-lab09-state-yourname"
+state_bucket = "tf-lab09-state-your-project-id"

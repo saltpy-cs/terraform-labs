@@ -2,13 +2,9 @@ terraform {
   required_version = ">= 1.6"
 
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
+    google = {
+      source  = "hashicorp/google"
       version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.0"
     }
   }
 
@@ -26,22 +22,20 @@ terraform {
   # }
 }
 
-provider "aws" {
-  region = var.aws_region
+provider "google" {
+  project = var.gcp_project
+  region  = var.gcp_region
 }
 
-module "s3_bucket" {
-  source = "./modules/s3-bucket"
+module "gcs_bucket" {
+  source = "./modules/gcs-bucket"
 
-  bucket_name        = "${var.project_name}-${var.environment}-${random_id.suffix.hex}"
-  enable_versioning  = true
-  environment        = var.environment
-  tags = {
+  bucket_name       = "${var.project_name}-${var.environment}"
+  project           = var.gcp_project
+  enable_versioning = true
+  environment       = var.environment
+  labels = {
     project    = var.project_name
     managed_by = "terraform"
   }
-}
-
-resource "random_id" "suffix" {
-  byte_length = 4
 }

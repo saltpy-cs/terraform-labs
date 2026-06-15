@@ -1,13 +1,13 @@
 output "instance_ids" {
-  description = "Map of environment name to EC2 instance ID"
+  description = "Map of environment name to GCE instance ID"
   # for expression over a for_each resource produces a map.
-  # for_each resources cannot use splat syntax ([*]).
-  value = { for k, v in aws_instance.app : k => v.id }
+  # for_each resources cannot use splat syntax ([*]) — see Exercise 7.
+  value = { for k, v in google_compute_instance.app : k => v.id }
 }
 
 output "instance_ips" {
-  description = "Map of environment name to public IP address"
-  value       = { for k, v in aws_instance.app : k => v.public_ip }
+  description = "Map of environment name to external IP address"
+  value       = { for k, v in google_compute_instance.app : k => v.network_interface[0].access_config[0].nat_ip }
 }
 
 output "enabled_environments" {
@@ -15,12 +15,7 @@ output "enabled_environments" {
   value       = local.enabled_envs
 }
 
-output "instance_names" {
-  description = "List of instance name strings built by the for expression in locals"
-  value       = local.instance_names
-}
-
-output "security_group_rules_debug" {
-  description = "The security group rules as built by the for expression in locals"
-  value       = local.security_group_rules
+output "prod_bucket" {
+  description = "Prod GCS bucket name, or 'not created' when enable_production=false"
+  value       = var.enable_production ? google_storage_bucket.prod_data[0].name : "not created"
 }

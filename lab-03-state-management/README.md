@@ -5,10 +5,10 @@
 By the end of this lab you will be able to:
 
 - Explain what Terraform state is, where it lives, and why it exists
-- Configure an S3 remote backend with DynamoDB state locking
+- Configure a GCS remote backend (the GCP equivalent of AWS S3+DynamoDB)
 - Use `terraform state` subcommands: `list`, `show`, `mv`, `rm`
 - Use `terraform import` to bring an existing, manually-created resource under Terraform management
-- Explain the bootstrapping problem and how a two-phase approach solves it
+- Explain how GCS provides state locking natively — without a separate locking resource
 
 ---
 
@@ -20,8 +20,8 @@ Terraform needs to map the resources declared in your configuration to real obje
 
 Without state, Terraform would have no way to:
 - Know whether a resource already exists (so it can update rather than recreate)
-- Track resource IDs assigned by the provider (e.g., `vpc-0a1b2c3d`)
-- Calculate a diff between the desired configuration and the current reality
+- Track resource IDs assigned by the provider (e.g., `projects/my-project/buckets/my-bucket`)
+- Calculate a diff between the desired configuration and current reality
 
 The default state file is `terraform.tfstate` in the working directory (local state). A backup copy is kept in `terraform.tfstate.backup`.
 
@@ -39,15 +39,15 @@ The state file is JSON with this top-level shape:
   "resources": [
     {
       "mode": "managed",
-      "type": "aws_s3_bucket",
+      "type": "google_storage_bucket",
       "name": "app_data",
-      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
       "instances": [
         {
           "schema_version": 0,
           "attributes": {
-            "bucket": "my-bucket-name",
-            "arn": "arn:aws:s3:::my-bucket-name",
+            "name": "tf-lab03-app-dev-a1b2c3d4",
+            "location": "US-CENTRAL1",
             ...
           }
         }
@@ -58,9 +58,9 @@ The state file is JSON with this top-level shape:
 ```
 
 Key fields:
-- **`serial`** — incremented on every write; used to detect conflicts
+- **`serial`** — incremented on every write; used to detect conflicts between concurrent state writes
 - **`lineage`** — a UUID assigned when state is first created; two states with different lineages are from different workspaces and should never be merged
-- **`resources`** — the array of managed objects
+- **`resources`** — the array of managed objects, each with every provider-known attribute
 
 ### Local state vs remote state
 
@@ -68,122 +68,110 @@ Local state is fine for learning and solo projects, but creates real problems in
 
 | Problem | What goes wrong |
 |---|---|
-| State lives on one machine | Others can't run `terraform plan` |
-| No locking | Two people apply simultaneously → corrupted state |
+| State lives on one machine | Others cannot run `terraform plan` |
+| No locking | Two people apply simultaneously, corrupting state |
 | No history | Hard to see what changed and when |
-| Sensitive values in plaintext | State contains secrets (passwords, tokens) in clear text |
+| Sensitive values in plaintext | State contains secrets in clear text on disk |
 
 **Remote state** solves all four: a shared backend stores the file, locking prevents concurrent writes, versioning provides history, and encryption protects secrets at rest.
 
-### State backends
+### State backends: storage + locking
 
-A **backend** defines:
-1. **Where** state is stored (e.g., S3 bucket)
-2. **How** locking works (e.g., DynamoDB)
+A **backend** defines two things:
+1. **Where** state is stored (e.g., a GCS bucket object)
+2. **How** locking works (prevents concurrent state writes)
 
 The backend is configured in the `terraform` block:
 
 ```hcl
 terraform {
-  backend "s3" {
-    bucket         = "my-tf-state-bucket"
-    key            = "envs/prod/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "terraform-state-locks"
-    encrypt        = true
+  backend "gcs" {
+    bucket = "my-tf-state-bucket"
+    prefix = "envs/prod"
   }
 }
 ```
 
-The `key` is the path within the bucket — think of it as a file path. A common convention is `<project>/<environment>/terraform.tfstate`.
+The `prefix` is the directory path within the bucket. Terraform stores the state file at `<prefix>/default.tfstate`. A common convention is `<project>/<environment>`.
 
-### S3 backend: the standard AWS choice
+### The GCS backend: GCP's native state storage
 
-The S3 backend is the most widely used backend for AWS-based teams:
+The GCS backend is the standard choice for GCP-based teams. It requires only a single resource — a GCS bucket. Compare this to AWS:
 
-- **S3** stores the state file. Enable versioning so you can roll back to previous state.
-- **Server-side encryption** (SSE-S3 or SSE-KMS) encrypts the state at rest.
-- **DynamoDB** provides locking via a single-row item keyed on `LockID`. When Terraform starts an operation that writes state, it puts an item in DynamoDB. When it finishes (or crashes), the item is deleted. If the item already exists, the operation is blocked.
+| Concern | AWS | GCP |
+|---|---|---|
+| State storage | S3 bucket | GCS bucket |
+| State locking | DynamoDB table (separate resource) | GCS bucket (built-in) |
+| Total resources needed | 2 | 1 |
 
-### State locking in detail
+**Why GCS locking needs no separate resource:**
+GCS implements locking using *conditional writes* and *object generation numbers*. Every GCS object has a `generation` (an integer that increments on every write). When Terraform acquires a lock, it writes a lock file using an `If-Generation-Match: 0` precondition (meaning "only write if this object does not exist yet"). If another process already holds the lock (the object exists), GCS rejects the write with a `412 Precondition Failed` error. When the lock is released, the lock file is deleted, and the next caller can acquire it. This is atomic and consistent — no external coordination service is required.
 
-When Terraform acquires a lock, it writes a `LockInfo` record to DynamoDB with fields including:
-- `ID` — a UUID for this lock
-- `Operation` — `plan` or `apply`
-- `Who` — the username and hostname
-- `Created` — timestamp
-
-If another process holds the lock, you'll see:
-
-```
-Error: Error acquiring the state lock
-
-  Error message: ConditionalCheckFailedException
-  Lock Info:
-    ID:        9a3f...
-    Path:      my-bucket/terraform.tfstate
-    Operation: OperationTypeApply
-    Who:       alice@workstation
-    Version:   1.9.0
-    Created:   2024-01-15 10:32:11
-```
-
-If Terraform crashes or is killed mid-apply, the lock may remain. You can release a stuck lock with:
-
-```
-terraform force-unlock <LOCK_ID>
-```
-
-### The `terraform state` subcommands
-
-These commands operate on the state file directly without making any cloud API calls (except `import`).
-
-| Command | When to use it |
-|---|---|
-| `terraform state list` | List all resources in state |
-| `terraform state show <addr>` | Print all attributes of one resource |
-| `terraform state mv <src> <dst>` | Rename or move a resource in state (without destroying it) |
-| `terraform state rm <addr>` | Remove a resource from state (without destroying it) |
-| `terraform state pull` | Print the raw state JSON to stdout |
-| `terraform state push` | Overwrite remote state with a local file (dangerous) |
-
-**`state mv`** is essential when refactoring. If you rename a resource block from `aws_s3_bucket.old` to `aws_s3_bucket.new` without using `state mv`, Terraform will destroy the old bucket and create a new one. With `state mv`, it just updates the pointer in state.
-
-**`state rm`** is used when you want Terraform to stop managing a resource but do not want it destroyed. After `state rm`, the resource still exists in AWS but Terraform no longer tracks it.
-
-### `terraform import`
-
-`terraform import` is the inverse of normal Terraform workflow. Instead of Terraform creating a resource from your config, you're telling Terraform "this real resource already exists — start tracking it."
-
-Workflow:
-1. Write the resource block in your `.tf` files (attributes can be approximate at first)
-2. Run `terraform import <resource_address> <provider_id>`
-3. Run `terraform plan` — Terraform shows what config changes are needed to match reality
-4. Update your config to match
-5. Run `terraform plan` — should show no changes
-
-Example:
-```bash
-terraform import aws_s3_bucket.manual my-existing-bucket-name
-```
-
-The provider ID format varies by resource type — always check the Terraform Registry docs for the "Import" section.
+**Authentication:** the GCS backend authenticates using Application Default Credentials (ADC), the same credential chain as the Google provider itself. After running `gcloud auth application-default login`, no additional configuration is needed.
 
 ### The bootstrapping problem
 
 Here is the chicken-and-egg problem with remote state:
 
-- You want Terraform to store its state in S3 + DynamoDB
-- But S3 and DynamoDB are AWS resources
-- You could manage them with Terraform
+- You want Terraform to store its state in GCS
+- But a GCS bucket is a GCP resource
+- You could manage it with Terraform
 - But that Terraform config also needs somewhere to store *its* state
 
 **Solution: two-phase bootstrap**
 
-1. **`bootstrap/`** — a minimal Terraform config that creates the S3 bucket and DynamoDB table. This config uses *local* state (acceptable because it manages only these two infrastructure resources, which rarely change).
-2. **`app/`** — your main config that uses the S3 bucket and DynamoDB table from step 1 as its remote backend.
+1. **`bootstrap/`** — a minimal Terraform config that creates the GCS bucket. This config uses *local* state (acceptable because it manages only this one infrastructure resource, which rarely changes after creation).
+2. **`app/`** — your main config, which uses the bucket from step 1 as its remote backend.
 
-This is a standard pattern in production. Some teams go further and manage the bootstrap resources with a separate tool (e.g., CloudFormation or the AWS CLI) to avoid state entirely.
+This is a standard pattern in production. Some teams go further and create the bootstrap bucket using the `gcloud` CLI or the GCP Console to avoid state entirely for that one resource.
+
+### The `terraform state` subcommands
+
+These commands operate on the state file directly without making cloud API calls (except `import`).
+
+| Command | When to use it |
+|---|---|
+| `terraform state list` | List all resource addresses in state |
+| `terraform state show <addr>` | Print all attributes of one resource |
+| `terraform state mv <src> <dst>` | Rename or move a resource in state (without destroying it) |
+| `terraform state rm <addr>` | Remove a resource from state (without destroying it in the cloud) |
+| `terraform state pull` | Print the raw state JSON to stdout |
+| `terraform state push` | Overwrite remote state with a local file (dangerous) |
+
+**`state mv`** is essential when refactoring. If you rename `google_storage_bucket.old` to `google_storage_bucket.new` in HCL without using `state mv`, Terraform plans to destroy the old bucket and create a new one. With `state mv`, it updates the pointer in state — no cloud API call is made.
+
+**`state rm`** is used when you want Terraform to stop managing a resource without destroying it. After `state rm`, the bucket still exists in GCP but Terraform no longer tracks it.
+
+### `terraform import`
+
+`terraform import` brings a manually-created resource under Terraform management.
+
+**Terraform 1.5+ preferred approach — `import {}` block:**
+
+```hcl
+import {
+  id = "my-existing-bucket-name"
+  to = google_storage_bucket.manual
+}
+
+resource "google_storage_bucket" "manual" {
+  name     = "my-existing-bucket-name"
+  location = "US"
+  # ... other attributes
+}
+```
+
+Run `terraform plan` — Terraform reads the real resource and shows you what config changes are needed to match. Run `terraform apply` to commit the import.
+
+**CLI approach (still works in all versions):**
+
+```bash
+terraform import google_storage_bucket.manual my-existing-bucket-name
+```
+
+This writes the resource into state immediately. Then run `terraform plan` to reconcile your config with reality.
+
+The import ID format varies by resource type — always check the "Import" section in the Terraform Registry docs for the resource.
 
 ---
 
@@ -191,32 +179,39 @@ This is a standard pattern in production. Some teams go further and manage the b
 
 ### Prerequisites
 
-- AWS CLI configured with credentials (`aws configure` or environment variables)
 - Terraform >= 1.5 installed
-- Your AWS credentials need permissions for: S3, DynamoDB, IAM (to create/delete these resources)
-
-### Verify AWS access
+- `gcloud` CLI installed and authenticated:
 
 ```bash
-aws sts get-caller-identity
+gcloud auth application-default login
 ```
 
-Expected output:
-```json
-{
-    "UserId": "AKIAIOSFODNN7EXAMPLE",
-    "Account": "123456789012",
-    "Arn": "arn:aws:iam::123456789012:user/your-user"
-}
+- A GCP project with billing enabled and the Storage API active:
+
+```bash
+gcloud services enable storage.googleapis.com --project=YOUR_PROJECT_ID
+```
+
+### Verify GCP access
+
+```bash
+gcloud auth application-default print-access-token > /dev/null && echo "ADC credentials are valid"
+gcloud config get-value project
+```
+
+Set your default project if needed:
+
+```bash
+gcloud config set project YOUR_PROJECT_ID
 ```
 
 ---
 
 ## Exercises
 
-### Exercise 1: Bootstrap — create the state backend infrastructure
+### Exercise 1: Bootstrap — create the GCS state bucket
 
-The `bootstrap/` directory creates the S3 bucket and DynamoDB table that will store your remote state.
+The `bootstrap/` directory creates the GCS bucket that will store your remote state. It uses local state intentionally — see the Concepts section for why.
 
 ```bash
 cd terraform/bootstrap
@@ -227,38 +222,35 @@ Expected output (abbreviated):
 ```
 Initializing the backend...
 Initializing provider plugins...
-- Finding hashicorp/aws versions matching "~> 5.0"...
+- Finding hashicorp/google versions matching "~> 6.0"...
 - Finding hashicorp/random versions matching "~> 3.0"...
-- Installing hashicorp/aws v5.x.x...
+- Installing hashicorp/google v6.x.x...
 - Installing hashicorp/random v3.x.x...
 
 Terraform has been successfully initialized!
 ```
 
 ```bash
-terraform apply
+terraform apply -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
 Review the plan. You should see:
-- `aws_s3_bucket.state` — will be created
-- `aws_s3_bucket_versioning.state` — will be created
-- `aws_s3_bucket_server_side_encryption_configuration.state` — will be created
-- `aws_dynamodb_table.locks` — will be created
 - `random_id.suffix` — will be created
+- `google_storage_bucket.tf_state` — will be created
 
 Type `yes` to confirm.
 
 Expected output (abbreviated):
 ```
-Apply complete! Resources: 5 added, 0 changed, 0 destroyed.
+Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
 
 Outputs:
 
-bucket_name = "tf-lab03-state-a1b2c3d4"
-table_name  = "tf-lab03-locks"
+bucket_name = "tf-lab03-tfstate-a1b2c3d4"
+bucket_url  = "gs://tf-lab03-tfstate-a1b2c3d4"
 ```
 
-**Note the bucket name and table name — you will need them in Exercise 3.**
+**Note the bucket name — you will need it in Exercise 3.**
 
 ---
 
@@ -279,21 +271,20 @@ Expected output (abbreviated):
     "lineage": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
     "outputs": {
         "bucket_name": {
-            "value": "tf-lab03-state-a1b2c3d4",
+            "value": "tf-lab03-tfstate-a1b2c3d4",
             "type": "string"
         }
     },
     "resources": [
         {
             "mode": "managed",
-            "type": "aws_s3_bucket",
-            "name": "state",
-            ...
+            "type": "google_storage_bucket",
+            "name": "tf_state",
             "instances": [
                 {
                     "attributes": {
-                        "bucket": "tf-lab03-state-a1b2c3d4",
-                        "arn": "arn:aws:s3:::tf-lab03-state-a1b2c3d4",
+                        "name": "tf-lab03-tfstate-a1b2c3d4",
+                        "location": "US",
                         ...
                     }
                 }
@@ -304,36 +295,43 @@ Expected output (abbreviated):
 ```
 
 Notice:
-- `serial` is 1 — this is the first write
-- `lineage` is a UUID assigned at init time — it uniquely identifies this state chain
-- The `resources` array contains every attribute of every resource
+- `serial` is 1 — this is the first write to state
+- `lineage` is a UUID assigned at `terraform init` time — it uniquely identifies this state chain
+- The `resources` array contains every attribute of every managed resource
+
+Find the GCS bucket resource specifically:
 
 ```bash
-# Count how many resources are tracked
-cat terraform.tfstate | python3 -c "import json,sys; s=json.load(sys.stdin); print(f'{len(s[\"resources\"])} resources')"
+cat terraform.tfstate | python3 -c "
+import json, sys
+state = json.load(sys.stdin)
+buckets = [r for r in state['resources'] if r['type'] == 'google_storage_bucket']
+print(json.dumps(buckets, indent=2))
+"
 ```
 
 ---
 
-### Exercise 3: Configure the remote backend in `app/`
+### Exercise 3: Configure the GCS backend in `app/`
 
-Open `terraform/app/main.tf`. Find the backend configuration block. It currently has placeholder values.
+Open `terraform/app/main.tf`. Find the `backend "gcs"` block. It currently has a placeholder bucket value.
 
-Replace the placeholder bucket name and table name with the values from Exercise 1:
+Replace `REPLACE_WITH_BUCKET_NAME` with the bucket name from Exercise 1:
 
 ```hcl
-terraform {
-  backend "s3" {
-    bucket         = "tf-lab03-state-a1b2c3d4"   # replace with your bucket_name output
-    key            = "lab03/app/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "tf-lab03-locks"             # replace with your table_name output
-    encrypt        = true
-  }
+backend "gcs" {
+  bucket = "tf-lab03-tfstate-a1b2c3d4"   # your actual bucket name
+  prefix = "lab03/app"
 }
 ```
 
 Save the file.
+
+You can also get the value programmatically:
+
+```bash
+terraform -chdir=../bootstrap output bucket_name
+```
 
 ---
 
@@ -341,15 +339,20 @@ Save the file.
 
 ```bash
 cd ../app
+terraform init -var="gcp_project=YOUR_PROJECT_ID"
+```
+
+Wait — `terraform init` does not accept `-var` flags. Variables are used by providers and resources, not by the backend itself. The GCS backend authenticates via ADC automatically. Just run:
+
+```bash
 terraform init
 ```
 
-Because you've configured a remote backend, Terraform prompts you to migrate any existing local state. Since this is a fresh directory there is nothing to migrate, but note the message:
-
+Expected output:
 ```
 Initializing the backend...
 
-Successfully configured the backend "s3"! Terraform will automatically
+Successfully configured the backend "gcs"! Terraform will automatically
 use this backend unless the backend configuration changes.
 
 Initializing provider plugins...
@@ -359,70 +362,92 @@ Terraform has been successfully initialized!
 ```
 
 ```bash
-terraform plan
+terraform plan -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
-You should see one resource to create: `aws_s3_bucket.app_data`.
+You should see two resources to create: `random_id.suffix` and `google_storage_bucket.app_data`.
 
 ```bash
-terraform apply
+terraform apply -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
 Type `yes`. Expected:
 ```
-Apply complete! Resources: 1 added, 0 changed, 0 destroyed.
+Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
 
 Outputs:
 
-app_bucket_arn  = "arn:aws:s3:::tf-lab03-app-dev-xxxx"
 app_bucket_name = "tf-lab03-app-dev-xxxx"
+app_bucket_url  = "gs://tf-lab03-app-dev-xxxx"
 ```
 
 ---
 
-### Exercise 5: Verify state is stored in S3
+### Exercise 5: Verify state is stored in GCS
 
 ```bash
-aws s3 ls s3://<your-bucket-name>/
+gsutil ls gs://<your-state-bucket-name>/
 ```
 
 Expected output:
 ```
-                           PRE lab03/
+gs://tf-lab03-tfstate-a1b2c3d4/lab03/
 ```
 
 ```bash
-aws s3 ls s3://<your-bucket-name>/lab03/app/
+gsutil ls gs://<your-state-bucket-name>/lab03/app/
 ```
 
 Expected output:
 ```
-2024-01-15 10:45:23        123 terraform.tfstate
+gs://tf-lab03-tfstate-a1b2c3d4/lab03/app/default.tfstate
 ```
 
-You can even download and read the state file from S3 directly:
+You can download and read the state file directly:
 
 ```bash
-aws s3 cp s3://<your-bucket-name>/lab03/app/terraform.tfstate - | python3 -m json.tool
+gsutil cat gs://<your-state-bucket-name>/lab03/app/default.tfstate | python3 -m json.tool
+```
+
+Or using the newer `gcloud storage` command:
+
+```bash
+gcloud storage ls gs://<your-state-bucket-name>/lab03/app/
+gcloud storage cat gs://<your-state-bucket-name>/lab03/app/default.tfstate
 ```
 
 ---
 
-### Exercise 6: Verify the DynamoDB lock table
+### Exercise 6: How GCS state locking works
+
+Unlike the AWS S3 backend, the GCS backend does not require a separate DynamoDB table. Locking is built into GCS using **conditional writes**.
+
+When Terraform acquires a lock it:
+1. Attempts to write a lock file to GCS using an HTTP `If-Generation-Match: 0` header — meaning "only write if this object does not already exist"
+2. If the object already exists (another process holds the lock), GCS returns `412 Precondition Failed` and Terraform shows an error:
+
+```
+Error: Error acquiring the state lock
+
+  Error message: writing "gs://my-bucket/lock" failed: googleapi: Error 412:
+  Precondition Failed, conditionNotMet
+  Lock Info:
+    ID:        9a3f...
+    Path:      gs://tf-lab03-tfstate-a1b2c3d4/lab03/app/
+    Operation: OperationTypeApply
+    Who:       alice@workstation
+    Created:   2024-01-15 10:32:11
+```
+
+3. When the operation completes (or fails), Terraform deletes the lock file, releasing the lock
+
+If Terraform crashes mid-apply and leaves a stale lock, you can release it with:
 
 ```bash
-aws dynamodb describe-table --table-name tf-lab03-locks --query 'Table.{Status:TableStatus,Items:ItemCount}'
+terraform force-unlock <LOCK_ID>
 ```
 
-Expected output:
-```json
-{
-    "Status": "ACTIVE",
-    "Items": 0
-}
-```
-
-The table is empty because no lock is held right now. Start an apply in one terminal and check again in another to see the lock item appear.
+The key difference from AWS: there is no DynamoDB table to inspect, no `aws dynamodb scan` command to check for active locks. The lock is just an object in the same GCS bucket.
 
 ---
 
@@ -436,7 +461,8 @@ terraform state list
 
 Expected output:
 ```
-aws_s3_bucket.app_data
+google_storage_bucket.app_data
+random_id.suffix
 ```
 
 This lists every resource address in state. Resource addresses take the form `<type>.<name>` for root-level resources, or `module.<module_name>.<type>.<name>` for resources inside modules.
@@ -446,30 +472,29 @@ This lists every resource address in state. Resource addresses take the form `<t
 ### Exercise 8: `terraform state show` — inspect a resource
 
 ```bash
-terraform state show aws_s3_bucket.app_data
+terraform state show google_storage_bucket.app_data
 ```
 
 Expected output (abbreviated):
 ```
-# aws_s3_bucket.app_data:
-resource "aws_s3_bucket" "app_data" {
-    arn                         = "arn:aws:s3:::tf-lab03-app-dev-xxxx"
-    bucket                      = "tf-lab03-app-dev-xxxx"
-    bucket_domain_name          = "tf-lab03-app-dev-xxxx.s3.amazonaws.com"
-    hosted_zone_id              = "Z3AQBSTGFYJSTF"
+# google_storage_bucket.app_data:
+resource "google_storage_bucket" "app_data" {
     id                          = "tf-lab03-app-dev-xxxx"
-    object_lock_enabled         = false
-    region                      = "us-east-1"
-    request_payer               = "BucketOwner"
-    tags                        = {}
-    tags_all                    = {}
+    location                    = "US-CENTRAL1"
+    name                        = "tf-lab03-app-dev-xxxx"
+    project                     = "your-project-id"
+    self_link                   = "https://www.googleapis.com/storage/v1/b/tf-lab03-app-dev-xxxx"
+    storage_class               = "STANDARD"
+    uniform_bucket_level_access = true
+    url                         = "gs://tf-lab03-app-dev-xxxx"
 
-    grant { ... }
-    versioning { ... }
+    versioning {
+        enabled = false
+    }
 }
 ```
 
-This is the full attribute map Terraform has recorded for this resource. Note that this is what Terraform *last saw*, not necessarily what is in AWS right now — that is what the next exercise is about.
+This is the full attribute map Terraform has recorded for this resource. Note that this reflects what Terraform *last saw* during an apply or refresh — not necessarily what is in GCP right now. The next exercise demonstrates why that matters.
 
 ---
 
@@ -477,65 +502,63 @@ This is the full attribute map Terraform has recorded for this resource. Note th
 
 State drift occurs when the real infrastructure diverges from what Terraform has recorded.
 
-1. In the AWS Console (or via the CLI), add a tag to the S3 bucket:
+1. In the GCP Console, navigate to **Cloud Storage > Buckets**, click on the app bucket, go to **Configuration**, and enable **Object versioning**. (Or use the CLI:)
 
 ```bash
-aws s3api put-bucket-tagging \
-  --bucket <your-app-bucket-name> \
-  --tagging 'TagSet=[{Key=manual,Value=true}]'
+gsutil versioning set on gs://tf-lab03-app-dev-xxxx
 ```
 
-2. Now run `terraform state show` again — you will NOT see the new tag. State still shows the old snapshot.
+2. Run `terraform state show google_storage_bucket.app_data` again — Terraform still shows `versioning.enabled = false`. State has not been refreshed yet.
 
-3. Run `terraform plan` — this is where drift is detected:
+3. Run `terraform plan`:
 
 ```bash
-terraform plan
+terraform plan -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
 Expected output:
 ```
-~ aws_s3_bucket.app_data
-  ~ tags     = {} -> null
-  ~ tags_all = {
-      + "manual" = "true"
-    } -> {}
+  ~ resource "google_storage_bucket" "app_data" {
+      ~ versioning {
+          ~ enabled = true -> false
+        }
+    }
+
+Plan: 0 to add, 1 to change, 0 to destroy.
 ```
 
-Terraform detects the drift by calling the AWS API and comparing the live attributes to the state file. The plan shows it will remove the manual tag.
+Terraform detected the drift by calling the GCP API and comparing live attributes to the state file. The plan shows it will disable versioning (to match your config).
 
-4. Apply to reconcile (bring reality back in line with config):
+4. Apply to reconcile:
 
 ```bash
-terraform apply
+terraform apply -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
 ---
 
 ### Exercise 10: `terraform state mv` — rename a resource without recreating it
 
-Suppose you want to rename `aws_s3_bucket.app_data` to `aws_s3_bucket.primary`. Normally renaming the HCL block would cause Terraform to destroy the old bucket and create a new one.
+Suppose you want to rename `google_storage_bucket.app_data` to `google_storage_bucket.primary`. Renaming the HCL block without using `state mv` would cause Terraform to plan a destroy of the old bucket and a create of a new one.
 
-`state mv` lets you rename the pointer in state before you rename the block in code.
-
-**Step 1:** Move the resource in state:
+**Step 1:** Move the resource address in state:
 
 ```bash
-terraform state mv aws_s3_bucket.app_data aws_s3_bucket.primary
+terraform state mv google_storage_bucket.app_data google_storage_bucket.primary
 ```
 
 Expected output:
 ```
-Move "aws_s3_bucket.app_data" to "aws_s3_bucket.primary"
+Move "google_storage_bucket.app_data" to "google_storage_bucket.primary"
 Successfully moved 1 object(s).
 ```
 
-**Step 2:** Update `main.tf` — rename the resource block from `app_data` to `primary` (and update any references to it in `outputs.tf`).
+**Step 2:** Update `main.tf` — rename the resource block label from `app_data` to `primary`. Update `outputs.tf` to reference `google_storage_bucket.primary`.
 
 **Step 3:** Verify no destroy/recreate:
 
 ```bash
-terraform plan
+terraform plan -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
 Expected output:
@@ -543,77 +566,93 @@ Expected output:
 No changes. Your infrastructure matches the configuration.
 ```
 
-**Step 4:** Move it back for the rest of the exercises:
+**Step 4:** Restore the original name for the remaining exercises:
 
 ```bash
-terraform state mv aws_s3_bucket.primary aws_s3_bucket.app_data
+terraform state mv google_storage_bucket.primary google_storage_bucket.app_data
 ```
 
-And revert the name change in `main.tf` and `outputs.tf`.
+Revert the name change in `main.tf` and `outputs.tf`.
 
 ---
 
 ### Exercise 11: `terraform import` — adopt a manually-created resource
 
-This exercise simulates a common real-world scenario: a colleague created a resource by hand (or via the console) and you need to bring it under Terraform management.
+This exercise simulates a common real-world scenario: a bucket was created by hand and you need to bring it under Terraform management.
 
-**Step 1:** Create an S3 bucket manually (outside Terraform):
+**Step 1:** Create a GCS bucket manually (outside Terraform):
 
 ```bash
-# Use a unique name — S3 bucket names are globally unique
-MANUAL_BUCKET="tf-lab03-manual-$(date +%s)"
+# Choose a unique suffix — GCS bucket names are globally unique
+SUFFIX=$(date +%s | tail -c 5)
+MANUAL_BUCKET="tf-lab03-manual-${SUFFIX}"
 echo "Manual bucket name: $MANUAL_BUCKET"
 
-aws s3 mb s3://$MANUAL_BUCKET
+gsutil mb gs://$MANUAL_BUCKET
 ```
 
 Expected output:
 ```
-make_bucket: tf-lab03-manual-1705315200
+Creating gs://tf-lab03-manual-12345/...
 ```
 
 **Step 2:** Add a resource block for this bucket to `terraform/app/main.tf`:
 
 ```hcl
-resource "aws_s3_bucket" "manual" {
-  bucket = "tf-lab03-manual-XXXXXXXXXX"   # replace with your actual bucket name
+resource "google_storage_bucket" "manual" {
+  name     = "tf-lab03-manual-12345"   # replace with your actual bucket name
+  location = "US"
+  force_destroy = true
+  uniform_bucket_level_access = true
 }
 ```
 
 **Step 3:** Without importing, run `terraform plan`:
 
 ```bash
-terraform plan
+terraform plan -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
-Terraform will propose to *create* the bucket (it doesn't know about it yet). If you applied, it would fail because the bucket already exists.
+Terraform proposes to *create* the bucket — it does not know the bucket already exists. If you applied, it would fail because GCS bucket names are globally unique and the name is already taken.
 
-**Step 4:** Import the bucket:
+**Step 4 (CLI import):** Import the bucket:
 
 ```bash
-terraform import aws_s3_bucket.manual tf-lab03-manual-XXXXXXXXXX
+terraform import google_storage_bucket.manual tf-lab03-manual-12345
 ```
 
 Expected output:
 ```
-aws_s3_bucket.manual: Importing from ID "tf-lab03-manual-XXXXXXXXXX"...
-aws_s3_bucket.manual: Import prepared!
-  Prepared aws_s3_bucket for import
-aws_s3_bucket.manual: Refreshing state... [id=tf-lab03-manual-XXXXXXXXXX]
+google_storage_bucket.manual: Importing from ID "tf-lab03-manual-12345"...
+google_storage_bucket.manual: Import prepared!
+  Prepared google_storage_bucket for import
+google_storage_bucket.manual: Refreshing state... [id=tf-lab03-manual-12345]
 
 Import successful!
-
-The resources that were imported are shown above. These resources are now in
-your Terraform state and will henceforth be managed by Terraform.
 ```
 
-**Step 5:** Run `terraform plan`:
+**Alternative: Terraform 1.5+ `import {}` block**
+
+Instead of running the CLI command, you can declare the import in HCL. Remove the `terraform import` command from above (or if you already ran it, do `terraform state rm google_storage_bucket.manual` to undo it), then add this to `main.tf`:
+
+```hcl
+import {
+  id = "tf-lab03-manual-12345"
+  to = google_storage_bucket.manual
+}
+```
+
+Run `terraform plan` — Terraform reads the real resource and incorporates it. Run `terraform apply` to commit the import. After apply, remove the `import {}` block (it is no longer needed once the import is recorded in state).
+
+The `import {}` block approach is preferred in Terraform 1.5+ because it is declarative, reviewable in PRs, and integrates with the plan/apply workflow.
+
+**Step 5:** Run `terraform plan` to see what config changes are needed to reconcile:
 
 ```bash
-terraform plan
+terraform plan -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
-You should see only minor differences (Terraform fills in computed attributes). Update your config to match and the plan should eventually show no changes.
+Update your resource block until the plan shows no changes.
 
 ---
 
@@ -625,29 +664,31 @@ Always destroy in the reverse order of creation — `app/` first, then `bootstra
 
 ```bash
 cd terraform/app
-terraform destroy
+terraform destroy -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
-Type `yes`. This destroys the app S3 bucket.
+Type `yes`. This destroys the app GCS bucket (and the manually-imported bucket if you left it in state).
 
 **Destroy the bootstrap resources:**
 
+The GCS state bucket has `force_destroy = false` to protect state files. Before destroying bootstrap, you need to remove the state files from the bucket (they were deleted when you ran `terraform destroy` in app/):
+
 ```bash
 cd ../bootstrap
-terraform destroy
+terraform destroy -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
-Type `yes`. This destroys the state S3 bucket and DynamoDB table.
+Type `yes`. This destroys the state GCS bucket.
 
-> **Note:** After destroying the state bucket, the `app/` backend no longer has a home. That is fine — both configs are destroyed. If you want to rerun the lab, start from Exercise 1.
+> **Note:** After destroying the state bucket, the `app/` backend no longer has a home. That is fine — both configs are gone. If you want to rerun the lab, start from Exercise 1.
 
 ---
 
 ## Key Takeaways
 
-- **Terraform state** is a JSON mapping between your configuration and real cloud resources. It is the source of truth for Terraform's view of the world.
-- **Remote state** (S3 + DynamoDB) is the standard pattern for AWS-based teams. It solves: shared access, locking, versioning, and encryption.
-- **State locking** via DynamoDB prevents two operators from corrupting state during concurrent applies.
-- **`terraform state mv`** is the safe way to refactor resource names — it updates the state pointer without touching the real resource.
-- **`terraform import`** is the escape hatch for manually-created resources. Write the config block first, import second, then reconcile the plan.
-- **The bootstrapping problem** is real: solve it by using local state for the backend infrastructure itself, and remote state for everything else.
+- **Terraform state** is a JSON mapping between your configuration and real GCP resources. Without it, Terraform cannot track what exists or calculate diffs.
+- **Remote state on GCS** is the standard pattern for GCP teams. A single GCS bucket provides storage, versioning, and locking — no separate locking resource is needed.
+- **GCS state locking** uses conditional writes (generation check) built into the GCS API. This is architecturally simpler than AWS S3+DynamoDB (one resource instead of two).
+- **`terraform state mv`** is the safe way to refactor resource names. It updates the state pointer without any cloud API calls that would destroy and recreate the real resource.
+- **`terraform import`** brings manually-created resources under management. Prefer the `import {}` block (Terraform 1.5+) over the CLI command — it is declarative and reviewable.
+- **The bootstrapping problem** is real: solve it by using local state for the backend infrastructure itself, and remote GCS state for everything else.

@@ -1,7 +1,12 @@
-variable "aws_region" {
-  description = "AWS region to deploy resources into."
+variable "gcp_project" {
+  description = "GCP project ID to deploy resources into."
   type        = string
-  default     = "us-east-1"
+}
+
+variable "gcp_region" {
+  description = "GCP region for resources and the provider."
+  type        = string
+  default     = "us-central1"
 }
 
 variable "environment" {

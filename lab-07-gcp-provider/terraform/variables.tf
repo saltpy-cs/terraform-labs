@@ -15,19 +15,13 @@ variable "gcp_zone" {
   default     = "us-central1-a"
 }
 
-variable "aws_region" {
-  description = "AWS region (provider is declared but no resources are created)"
-  type        = string
-  default     = "us-east-1"
-}
-
-variable "bucket_name_prefix" {
-  description = "Prefix for GCS bucket names. A random suffix is appended to ensure uniqueness."
+variable "project_name" {
+  description = "Short name used as a prefix for all resource names"
   type        = string
   default     = "tf-lab07"
 }
 
-variable "service_account_email" {
-  description = "A GCP service account email to grant Storage Object Viewer on the primary bucket (e.g. mysa@project.iam.gserviceaccount.com)"
+variable "your_user_email" {
+  description = "Your GCP user account email, for granting IAM access (e.g. you@example.com)"
   type        = string
 }

@@ -1,8 +1,8 @@
 terraform {
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 6.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -13,33 +13,31 @@ terraform {
   # ---------------------------------------------------------------------------
   # REMOTE BACKEND CONFIGURATION
   #
-  # NOTE: Fill in the bucket and dynamodb_table values from the outputs of the
-  # bootstrap/ apply before running `terraform init` in this directory.
+  # Fill in the bucket value from the bootstrap output before running
+  # `terraform init` in this directory:
   #
-  #   cd ../bootstrap && terraform output
+  #   terraform -chdir=../bootstrap output bucket_name
   #
-  # Then replace REPLACE_WITH_BUCKET_NAME and REPLACE_WITH_TABLE_NAME below.
+  # Then replace REPLACE_WITH_BUCKET_NAME below.
   #
-  # Alternative — use -backend-config flags instead of editing this file:
+  # Alternative — pass via -backend-config flags at init time (useful in CI):
   #
   #   terraform init \
-  #     -backend-config="bucket=tf-lab03-state-a1b2c3d4" \
-  #     -backend-config="dynamodb_table=tf-lab03-locks"
+  #     -backend-config="bucket=tf-lab03-tfstate-a1b2c3d4"
   #
-  # The -backend-config approach is common in CI/CD pipelines where the bucket
-  # name is injected at runtime rather than hardcoded in source control.
+  # GCS locking: unlike the AWS S3 backend (which requires a separate DynamoDB
+  # table), the GCS backend provides locking natively using a conditional write
+  # on the state object generation. No lock table is needed.
   # ---------------------------------------------------------------------------
-  backend "s3" {
-    bucket         = "REPLACE_WITH_BUCKET_NAME"
-    key            = "lab03/app/terraform.tfstate"
-    region         = "us-east-1"
-    dynamodb_table = "REPLACE_WITH_TABLE_NAME"
-    encrypt        = true
+  backend "gcs" {
+    bucket = "REPLACE_WITH_BUCKET_NAME" # Replace with output from bootstrap: terraform -chdir=../bootstrap output bucket_name
+    prefix = "lab03/app"
   }
 }
 
-provider "aws" {
-  region = var.aws_region
+provider "google" {
+  project = var.gcp_project
+  region  = var.gcp_region
 }
 
 resource "random_id" "suffix" {
@@ -47,19 +45,23 @@ resource "random_id" "suffix" {
 }
 
 # ---------------------------------------------------------------------------
-# App S3 bucket
+# App GCS bucket
 #
-# A simple S3 bucket representing "application data storage". We use S3 here
-# to keep the lab cost at zero — the goal is to practice state operations,
+# A simple GCS bucket representing "application data storage". GCS buckets
+# are free at low usage levels — the goal here is to practice state operations,
 # not to build real application infrastructure.
 # ---------------------------------------------------------------------------
-resource "aws_s3_bucket" "app_data" {
-  bucket = "${var.project_name}-app-${var.environment}-${random_id.suffix.hex}"
+resource "google_storage_bucket" "app_data" {
+  name     = "${var.project_name}-app-${var.environment}-${random_id.suffix.hex}"
+  location = var.gcp_region
 
-  tags = {
-    Name        = "${var.project_name}-app-${var.environment}"
-    Environment = var.environment
-    Lab         = "lab-03"
-    ManagedBy   = "terraform"
+  # force_destroy = true allows terraform destroy to delete the bucket even if
+  # it contains objects. Safe here because this is a lab bucket.
+  force_destroy = true
+
+  uniform_bucket_level_access = true
+
+  versioning {
+    enabled = false
   }
 }

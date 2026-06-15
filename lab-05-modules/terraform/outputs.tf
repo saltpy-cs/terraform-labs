@@ -1,14 +1,14 @@
-output "vpc_id" {
-  description = "ID of the VPC created by the local module."
-  value       = module.vpc.vpc_id
+output "network_id" {
+  description = "ID of the VPC network, sourced from the vpc module output."
+  value       = module.vpc.network_id
 }
 
-output "public_subnet_ids" {
-  description = "List of public subnet IDs from the local module."
-  value       = module.vpc.public_subnet_ids
+output "subnet_id" {
+  description = "ID of the subnetwork, sourced from the vpc module output."
+  value       = module.vpc.subnet_id
 }
 
-output "instance_public_ip" {
-  description = "Public IP address of the EC2 instance."
-  value       = aws_instance.web.public_ip
+output "instance_external_ip" {
+  description = "External IP address of the compute instance."
+  value       = google_compute_instance.app.network_interface[0].access_config[0].nat_ip
 }

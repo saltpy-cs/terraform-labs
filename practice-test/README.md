@@ -5,7 +5,7 @@ A timed, hands-on exam simulation covering both the **Terraform Associate (003)*
 toward Associate (82 of 100 points) with three Professional-level questions at the end.
 
 This test simulates real exam conditions: you write actual Terraform code, run CLI commands,
-and verify your results against a live AWS environment. There are no multiple-choice questions.
+and verify your results against a live GCP environment. There are no multiple-choice questions.
 
 ---
 
@@ -42,7 +42,12 @@ from this course.
 ## Prerequisites
 
 - Terraform >= 1.6 installed (`terraform version`)
-- AWS CLI configured with credentials for `us-east-1` (`aws sts get-caller-identity`)
+- Google Cloud SDK installed and authenticated:
+  ```bash
+  gcloud auth application-default login
+  gcloud config set project <your-project-id>
+  ```
+- A GCP project with billing enabled and the Compute Engine and Storage APIs active
 - The practice environment has been provisioned (see Setup below)
 - A working directory at `~/tf-practice/` (created by setup)
 
@@ -50,12 +55,16 @@ from this course.
 
 ## Setup
 
-The setup configuration creates a small AWS environment that several questions operate against.
+The setup configuration creates a small GCP environment that several questions operate against.
 Run it once before starting the timer.
 
 ```bash
 # From the repo root
 cd terraform-labs/practice-test/setup
+
+# Copy the example vars file and set your project ID
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars and set gcp_project = "your-project-id"
 
 terraform init
 terraform apply -auto-approve
@@ -63,17 +72,17 @@ terraform apply -auto-approve
 # Verify the output files exist
 cat /tmp/practice-bucket-name.txt
 cat /tmp/practice-import-bucket.txt
-cat /tmp/practice-vpc-id.txt
+cat /tmp/practice-vpc-selflink.txt
 ```
 
 The setup provisions:
-- An S3 bucket (random suffix) for use as a remote state backend — name written to `/tmp/practice-bucket-name.txt`
-- A second S3 bucket for the import exercise — name written to `/tmp/practice-import-bucket.txt`
-- Looks up the default VPC and writes its ID to `/tmp/practice-vpc-id.txt`
-- Creates the template file for Q7 at `~/tf-practice/q07/template.txt.tpl`
-- Creates the base working directory `~/tf-practice/`
+- A GCS bucket (random suffix) for use as a remote state backend — name written to `/tmp/practice-bucket-name.txt`
+- A second GCS bucket for the import exercise — name written to `/tmp/practice-import-bucket.txt`
+- A VPC network named `practice-vpc` — self_link written to `/tmp/practice-vpc-selflink.txt`
+- Creates the template file for Q7 at `~/tf-practice/q07/startup.sh.tpl`
+- Creates the base working directory tree `~/tf-practice/`
 
-Setup takes approximately 30–60 seconds. Do not start the timer until `terraform apply` completes.
+Setup takes approximately 60–120 seconds. Do not start the timer until `terraform apply` completes.
 
 ---
 
@@ -108,13 +117,13 @@ for q in q01 q02 q04 q05 q06 q07 q08 q10 q11 q12; do
   fi
 done
 
-# Q09 and Q03 touch real S3 state — clean up manually if needed
+# Q09 and Q03 touch real GCS state — clean up manually if needed
 rm -f /tmp/tf-practice.txt
 
-# Destroy the setup infrastructure (removes the S3 buckets)
+# Destroy the setup infrastructure (removes the GCS buckets and VPC)
 cd terraform-labs/practice-test/setup
 terraform destroy -auto-approve
 ```
 
-> The S3 buckets created by setup will incur minimal cost (a few cents at most) if left running.
+> The GCS buckets and VPC network created by setup will incur minimal cost if left running.
 > Always run `terraform destroy` in the `setup/` directory when you are done.
