@@ -363,7 +363,17 @@ Expected output (abbreviated):
 Plan: 0 to add, 1 to change, 0 to destroy.
 ```
 
-The `~` symbol indicates an in-place update. GCP can apply this change without stopping the VM. Apply it if you like, then revert.
+The `~` symbol indicates an in-place update. GCP can apply this change without stopping the VM. Apply it and confirm the instance keeps running:
+
+```bash
+terraform apply -auto-approve
+```
+
+Then revert the change — remove `"lab04"` from the tags list — and re-apply to restore the original state:
+
+```bash
+terraform apply -auto-approve
+```
 
 ---
 
@@ -432,6 +442,8 @@ No changes. Your infrastructure matches the configuration.
 `depends_on` affects only ordering — it does not cause recreation of existing resources. The plan shows no changes because the infrastructure already matches the configuration. This is different from Exercise 9, where changing a resource's argument triggered recreation.
 
 This pattern matters when a resource must exist before another can function correctly but there is no attribute reference to express that relationship (for example, an IAM binding that must be in place before a GCE instance can call a GCP API).
+
+Revert the change — remove the `depends_on` line from the instance block — before continuing to Exercise 11.
 
 ---
 
