@@ -406,9 +406,37 @@ Plan: 0 to add, 1 to change, 0 to destroy.
 
 The `~` indicates an in-place update. Unlike the tag change in Exercise 8, this one requires a VM stop/start — the external IP is preserved because the resource is not recreated, but the instance is unavailable for 30–60 seconds during the change.
 
-Examples of changes that do force full replacement (`-/+`) in the GCP provider: changing the instance `name`, modifying `boot_disk` image, or changing `zone`.
-
 **Do not apply this change.** Restore `machine_type = "e2-micro"` and verify the plan shows no changes:
+
+```bash
+terraform plan
+# No changes. Your infrastructure matches the configuration.
+```
+
+**Part 2 — forced replacement (`-/+`):** Now change the instance name:
+
+```hcl
+resource "google_compute_instance" "main" {
+  name = "tf-lab04-instance-renamed"
+  ...
+}
+```
+
+```bash
+terraform plan
+```
+
+Expected output (abbreviated):
+```
+  -/+ resource "google_compute_instance" "main" (must be replaced)
+      ~ name = "tf-lab04-instance" -> "tf-lab04-instance-renamed" # forces replacement
+
+Plan: 1 to add, 0 to change, 1 to destroy.
+```
+
+GCP instances cannot be renamed — the name is part of the resource's identity. Terraform must destroy the old instance and create a new one. In a real environment this means a new external IP (unless you have a reserved static IP) and full VM downtime during the replacement.
+
+**Do not apply this change.** Restore `name = "tf-lab04-instance"` and verify the plan shows no changes:
 
 ```bash
 terraform plan
