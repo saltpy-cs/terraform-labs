@@ -351,7 +351,14 @@ The key entry is `roles/storage.objectAdmin` — only the member explicitly list
 
 **Step 3: Restore the original configuration.**
 
-Switch back to `google_storage_bucket_iam_member` resources as originally defined and re-apply.
+In `main.tf`, remove `google_storage_bucket_iam_binding.user_binding` and uncomment `google_storage_bucket_iam_member.user_access` so the file is back to its original state (a single `objectViewer` binding for your user). Also remove `google_storage_bucket_iam_member.user_admin` if it is still present from Step 1.
+
+Confirm the revert and re-apply:
+
+```bash
+terraform plan
+terraform apply -auto-approve
+```
 
 ### Exercise 7 — Inspect the Europe Bucket via State
 
@@ -471,13 +478,25 @@ No `tf-lab07` resources should remain.
 
 ## Cleanup
 
+Before destroying, confirm `main.tf` has all exercise 6 changes reverted — `google_storage_bucket_iam_member.user_access` uncommented and `google_storage_bucket_iam_binding.user_binding` removed:
+
 ```bash
-cd lab-07-gcp-provider/terraform
+terraform plan
+# No changes. Your infrastructure matches the configuration.
+```
+
+Then destroy:
+
+```bash
 terraform destroy -auto-approve
 ```
 
-Verify in GCP Console that all resources are removed:
+Verify nothing remains:
 
-- **Compute Engine > VM instances**: no `tf-lab07` instances
-- **Cloud Storage > Buckets**: no `tf-lab07` buckets
-- **IAM & Admin > Service accounts**: no `tf-lab07-sa` account
+```bash
+gcloud compute instances list --filter="name~tf-lab07"
+gcloud storage buckets list --filter="name~tf-lab07"
+gcloud iam service-accounts list --filter="email~tf-lab07"
+```
+
+All three commands should return no output.
