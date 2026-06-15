@@ -210,7 +210,7 @@ Look at the plan output to confirm `staging` is being used, not `dev` from the t
 ### Exercise 5 — Apply and inspect outputs
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
 Review all outputs:
@@ -279,7 +279,7 @@ the `common_tags` local (which uses `var.environment`) changes throughout the pl
 ### Exercise 9 — Destroy
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 This lab creates no cloud resources — destroy removes only local state tracking the
@@ -298,7 +298,7 @@ random resources.
 ## Cleanup
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 No cloud resources — no charges incurred.

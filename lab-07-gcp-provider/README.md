@@ -209,10 +209,10 @@ Count how many resources use the default provider vs the aliased one. Only `goog
 ### Exercise 3 — Apply
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
-Type `yes`. Expected output:
+Expected output:
 
 ```
 Apply complete! Resources: 9 added, 0 changed, 0 destroyed.
@@ -286,7 +286,7 @@ resource "google_storage_bucket_iam_member" "user_admin" {
 Apply:
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
 Check the policy again:
@@ -322,7 +322,7 @@ Expected: the plan removes the `iam_member` resources and adds the `iam_binding`
 Apply, then check the policy:
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 gcloud storage buckets get-iam-policy $(terraform output -raw us_bucket_url)
 ```
 
@@ -400,10 +400,10 @@ terraform show -json | python3 -m json.tool | grep -A5 '"europe"'
 ### Exercise 10 — Destroy
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
-Type `yes`. Expected:
+Expected:
 
 ```
 Destroy complete! Resources: 9 destroyed.
@@ -437,7 +437,7 @@ No `tf-lab07` resources should remain.
 
 ```bash
 cd lab-07-gcp-provider/terraform
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 Verify in GCP Console that all resources are removed:

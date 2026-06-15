@@ -391,10 +391,10 @@ Type `Ctrl+D` to exit.
 ### Exercise 2 — Conditional Apply (enable_production=false)
 
 ```bash
-terraform apply -var='enable_production=false'
+terraform apply -auto-approve -var='enable_production=false'
 ```
 
-Type `yes` when prompted. Expected: Terraform creates instances for `dev` and `staging` only. The `prod` instance and `google_storage_bucket.prod_data` are excluded.
+Expected: Terraform creates instances for `dev` and `staging` only. The `prod` instance and `google_storage_bucket.prod_data` are excluded.
 
 Check the output:
 
@@ -426,7 +426,7 @@ Expected:
 ### Exercise 3 — Re-apply with Production Enabled
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
 (The default `enable_production=true` from `terraform.tfvars` is used.)
@@ -685,7 +685,7 @@ These keys are exactly the suffixes you'll see in `terraform state list`:
 ### Exercise 11 — Apply and inspect flattened subnets
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
 The apply now includes `google_compute_subnetwork.multi[*]` resources. After apply:
@@ -735,10 +735,10 @@ subnet.
 ### Exercise 12 — Destroy
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
-Type `yes`. Expected:
+Expected:
 
 ```
 Destroy complete! Resources: X destroyed.
@@ -776,7 +776,7 @@ No `tf-lab08` entries should appear.
 
 ```bash
 cd lab-08-complex-expressions/terraform
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 Verify in GCP Console that all resources are removed:

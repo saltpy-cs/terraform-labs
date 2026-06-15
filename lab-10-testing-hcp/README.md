@@ -393,7 +393,7 @@ These variables are stored encrypted and injected into the remote runner environ
 ### Exercise 10 — Remote Apply
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
 Observe: Terraform uploads the configuration to HCP Terraform and runs the plan there. You see a URL in the output:
@@ -437,7 +437,7 @@ Apply the policy set to your workspace. Run `terraform plan` again — observe t
 ### Exercise 12 — Destroy
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 The destroy runs remotely on HCP Terraform. Expected:
@@ -475,7 +475,7 @@ gsutil ls | grep tf-lab10
 
 **Part B:**
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 In the HCP Terraform UI: optionally delete the workspace and organisation if no longer needed.

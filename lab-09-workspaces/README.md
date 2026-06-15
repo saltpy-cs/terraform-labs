@@ -247,10 +247,10 @@ The `*` has moved to `dev`.
 ### Exercise 5 — Apply in Dev Workspace
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
-Type `yes`. Expected output includes:
+Expected output includes:
 ```
 Outputs:
 
@@ -278,10 +278,10 @@ Observe the map output showing all three values together. The `workspace` key sh
 
 ```bash
 terraform workspace new staging
-terraform apply
+terraform apply -auto-approve
 ```
 
-Type `yes`. Expected output includes:
+Expected output includes:
 ```
 workspace          = "staging"
 machine_type_used  = "e2-micro"
@@ -367,10 +367,10 @@ Expected:
 Switch to staging and destroy:
 ```bash
 terraform workspace select staging
-terraform destroy
+terraform destroy -auto-approve
 ```
 
-Type `yes`. Expected: staging resources destroyed.
+Expected: staging resources destroyed.
 
 Verify dev resources are unaffected:
 ```bash
@@ -387,11 +387,11 @@ Destroy all remaining workspaces:
 ```bash
 # Destroy prod (if you applied it)
 terraform workspace select prod
-terraform destroy  # only if prod was applied
+terraform destroy -auto-approve  # only if prod was applied
 
 # Destroy dev
 terraform workspace select dev
-terraform destroy
+terraform destroy -auto-approve
 
 # Switch back to default (staging was already destroyed in Exercise 11)
 terraform workspace select default

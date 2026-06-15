@@ -246,10 +246,10 @@ Run `terraform plan` (before applying). The plan should show only the firewall r
 ```bash
 cd terraform
 terraform init
-terraform apply
+terraform apply -auto-approve
 ```
 
-Type `yes` when prompted. This creates the VPC, two environment subnets, one combined firewall rule, 3 count-based instances, and 2 for_each-based instances.
+This creates the VPC, two environment subnets, one combined firewall rule, 3 count-based instances, and 2 for_each-based instances.
 
 ### Exercise 3 — Observe resource addresses in state
 
@@ -305,7 +305,7 @@ lifecycle {
 Apply the change (no resource changes, just the block being added to config). Now try:
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 Terraform will error before making any changes:
@@ -318,7 +318,7 @@ Error: Instance cannot be destroyed
 Comment the lifecycle block back out and apply again to restore the normal state:
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
 ### Exercise 6 — `ignore_changes` and external drift
@@ -354,7 +354,7 @@ Run `terraform plan`. Now Terraform wants to remove the `startup-time` metadata 
 ### Exercise 7 — Destroy
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 Confirm with `yes`.
@@ -376,7 +376,7 @@ Confirm with `yes`.
 
 ```bash
 cd terraform
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 Verify in the GCP Console (Compute Engine) that no instances, networks, or firewall rules remain.

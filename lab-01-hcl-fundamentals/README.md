@@ -169,10 +169,10 @@ Key observations:
 ### Exercise 3 — Apply the configuration
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
-Type `yes` when prompted. Observe:
+Observe:
 1. `random_pet.name` is created first (no dependencies)
 2. `null_resource.hello` is created second (depends on the pet name)
 3. The `local-exec` provisioner runs and prints `Hello, <name>`
@@ -221,7 +221,7 @@ Two things to observe:
 - `random_string.suffix` is unchanged — it has no dependency on `random_pet.name`
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
 Note the new pet name in the `local-exec` output.
@@ -260,7 +260,7 @@ use `terraform taint` (deprecated) or the modern replacement:
 
 ```bash
 # Tell Terraform to replace random_pet.name on the next apply
-terraform apply -replace=random_pet.name
+terraform apply -auto-approve -replace=random_pet.name
 ```
 
 This forces a new random name, which cascades to the `null_resource` (since its trigger
@@ -269,10 +269,10 @@ references the pet name). Observe the chain of replacements in the plan.
 ### Exercise 8 — Destroy
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
-Type `yes`. Observe that resources are destroyed in reverse dependency order:
+Observe that resources are destroyed in reverse dependency order:
 `null_resource.hello` first, then `random_pet.name`.
 
 After destroy, the state file still exists but is now empty:
@@ -296,7 +296,7 @@ You'll see `"resources": []` — the state is empty, not deleted.
 ## Cleanup
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 This lab uses no cloud resources — there is nothing to pay for and no cloud cleanup needed.

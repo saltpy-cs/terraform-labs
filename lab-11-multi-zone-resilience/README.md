@@ -212,7 +212,7 @@ during a rolling update?
 ### Exercise 2 — Apply
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
 The apply takes 3–5 minutes. The longest wait is instance startup (nginx installing
@@ -410,7 +410,7 @@ Read the plan carefully. You should see:
   reference the new template
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
 Watch the rolling update:
@@ -460,7 +460,7 @@ traffic — they just add capacity.
 ## Cleanup
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 This destroys all resources including the load balancer forwarding rule (the main cost

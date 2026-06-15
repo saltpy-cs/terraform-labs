@@ -152,13 +152,13 @@ resource "null_resource" "cloud_sql_switchover" {
 
 ```bash
 # First switchover:
-terraform apply -var="failover_timestamp=$(date +%s)"
+terraform apply -auto-approve -var="failover_timestamp=$(date +%s)"
 
 # Clear (destroy the null_resource, no provisioner):
-terraform apply   # failover_timestamp = "" → count = 0 → resource destroyed
+terraform apply -auto-approve   # failover_timestamp = "" → count = 0 → resource destroyed
 
 # Second switchover (new timestamp → resource recreated → provisioner runs):
-terraform apply -var="failover_timestamp=$(date +%s)"
+terraform apply -auto-approve -var="failover_timestamp=$(date +%s)"
 ```
 
 ### Switchover vs Failover
@@ -237,7 +237,7 @@ terraform graph | dot -Tpng -o graph.png
 ### Exercise 3 — Apply (expect 5–10 minutes)
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
 Cloud SQL provisioning is slow (~5–10 minutes). This is normal — GCP is provisioning two instances (primary + standby) across two zones. While it's running:
@@ -302,7 +302,7 @@ This illustrates a real production risk: changing HA settings is not always a sa
 ### Exercise 7 — Trigger a Cloud SQL planned switchover
 
 ```bash
-terraform apply -var="failover_timestamp=$(date +%s)"
+terraform apply -auto-approve -var="failover_timestamp=$(date +%s)"
 ```
 
 Terraform will create `null_resource.cloud_sql_switchover[0]` and run the `local-exec` provisioner, which calls `gcloud sql instances failover`. Watch the output.
@@ -321,17 +321,17 @@ The primary zone should now differ from where it was before.
 Apply again WITHOUT changing the timestamp:
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 # failover_timestamp is back to "" → null_resource count = 0 → resource is destroyed
 ```
 
 Now set the same timestamp from before:
 
 ```bash
-terraform apply -var="failover_timestamp=1000000000"   # a fixed, old value
+terraform apply -auto-approve -var="failover_timestamp=1000000000"   # a fixed, old value
 # null_resource is created with timestamp=1000000000
 
-terraform apply -var="failover_timestamp=1000000000"   # same value again
+terraform apply -auto-approve -var="failover_timestamp=1000000000"   # same value again
 # Terraform: null_resource already exists with these triggers → no changes → provisioner does NOT re-run
 ```
 
@@ -340,7 +340,7 @@ This demonstrates why the pattern uses a unique timestamp: the triggers map must
 ### Exercise 9 — Trigger a Redis failover
 
 ```bash
-terraform apply -var="redis_failover_timestamp=$(date +%s)"
+terraform apply -auto-approve -var="redis_failover_timestamp=$(date +%s)"
 ```
 
 Check the primary zone before and after:
@@ -350,7 +350,7 @@ Check the primary zone before and after:
 gcloud redis instances describe tf-lab12-redis --region=us-central1 \
   --project=YOUR_PROJECT --format="value(currentLocationId)"
 
-terraform apply -var="redis_failover_timestamp=$(date +%s)"
+terraform apply -auto-approve -var="redis_failover_timestamp=$(date +%s)"
 
 # After (primary zone should have changed):
 gcloud redis instances describe tf-lab12-redis --region=us-central1 \
@@ -378,7 +378,7 @@ Both endpoints survive a failover: the connection name and the Redis host/port d
 ### Exercise 11 — Cleanup
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 Cloud SQL can take ~3–5 minutes to destroy. Confirm you see all resources removed.

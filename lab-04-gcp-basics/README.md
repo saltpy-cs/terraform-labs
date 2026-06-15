@@ -278,10 +278,9 @@ resource "google_compute_subnetwork" "public" {
 ### Exercise 6: Apply
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
-Review the plan one final time, then type `yes`.
 
 Watch the creation output — notice the parallelism: the subnet and both firewall rules are created concurrently after the network is ready, because they all depend only on the network (not on each other).
 
@@ -439,10 +438,10 @@ This pattern matters when a resource must exist before another can function corr
 ### Exercise 11: `terraform destroy`
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
-Review the destruction plan and type `yes`. Observe the reverse dependency order in the output:
+Observe the reverse dependency order in the output:
 
 ```
 google_compute_instance.main: Destroying...

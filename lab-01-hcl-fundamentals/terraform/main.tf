@@ -17,7 +17,7 @@ terraform {
 # This generates a two-word pet name like "vocal-hawk".
 resource "random_pet" "name" {
   length    = 2
-  separator = "-"
+  separator = "_"
 }
 
 # The null_resource does nothing by itself. Its value is in the provisioner

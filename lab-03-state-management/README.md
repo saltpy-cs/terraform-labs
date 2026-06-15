@@ -231,14 +231,13 @@ Terraform has been successfully initialized!
 ```
 
 ```bash
-terraform apply -var="gcp_project=YOUR_PROJECT_ID"
+terraform apply -auto-approve -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
 Review the plan. You should see:
 - `random_id.suffix` — will be created
 - `google_storage_bucket.tf_state` — will be created
 
-Type `yes` to confirm.
 
 Expected output (abbreviated):
 ```
@@ -368,10 +367,10 @@ terraform plan -var="gcp_project=YOUR_PROJECT_ID"
 You should see two resources to create: `random_id.suffix` and `google_storage_bucket.app_data`.
 
 ```bash
-terraform apply -var="gcp_project=YOUR_PROJECT_ID"
+terraform apply -auto-approve -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
-Type `yes`. Expected:
+Expected:
 ```
 Apply complete! Resources: 2 added, 0 changed, 0 destroyed.
 
@@ -532,7 +531,7 @@ Terraform detected the drift by calling the GCP API and comparing live attribute
 4. Apply to reconcile:
 
 ```bash
-terraform apply -var="gcp_project=YOUR_PROJECT_ID"
+terraform apply -auto-approve -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
 ---
@@ -664,10 +663,10 @@ Always destroy in the reverse order of creation — `app/` first, then `bootstra
 
 ```bash
 cd terraform/app
-terraform destroy -var="gcp_project=YOUR_PROJECT_ID"
+terraform destroy -auto-approve -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
-Type `yes`. This destroys the app GCS bucket (and the manually-imported bucket if you left it in state).
+This destroys the app GCS bucket (and the manually-imported bucket if you left it in state).
 
 **Destroy the bootstrap resources:**
 
@@ -675,10 +674,10 @@ The GCS state bucket has `force_destroy = false` to protect state files. Before 
 
 ```bash
 cd ../bootstrap
-terraform destroy -var="gcp_project=YOUR_PROJECT_ID"
+terraform destroy -auto-approve -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
-Type `yes`. This destroys the state GCS bucket.
+This destroys the state GCS bucket.
 
 > **Note:** After destroying the state bucket, the `app/` backend no longer has a home. That is fine — both configs are gone. If you want to rerun the lab, start from Exercise 1.
 

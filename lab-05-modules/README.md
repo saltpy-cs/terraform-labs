@@ -257,10 +257,9 @@ google_compute_instance.app         will be created
 ### Exercise 4 — Apply
 
 ```bash
-terraform apply
+terraform apply -auto-approve
 ```
 
-Type `yes` when prompted.
 
 ### Exercise 5 — Consume module outputs
 
@@ -334,7 +333,7 @@ Observe the new download step in the output — Terraform fetches the module fro
 ### Exercise 9 — Destroy
 
 ```bash
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 Confirm with `yes`.
@@ -357,7 +356,7 @@ Confirm with `yes`.
 
 ```bash
 cd terraform
-terraform destroy
+terraform destroy -auto-approve
 ```
 
 Verify in the GCP Console that no Compute Engine instances, networks, or firewall rules remain.
