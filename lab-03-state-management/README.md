@@ -653,18 +653,23 @@ cd terraform/app
 terraform destroy -auto-approve -var="gcp_project=YOUR_PROJECT_ID"
 ```
 
-This destroys the app GCS bucket (and the manually-imported bucket if you left it in state).
+This destroys the app GCS bucket. However, the Terraform state file (`lab03/app/default.tfstate`) and any versioned copies remain in the state bucket — `terraform destroy` removes GCP resources but never deletes the state file itself.
 
-**Destroy the bootstrap resources:**
+**Empty the state bucket:**
 
-The GCS state bucket has `force_destroy = false` to protect state files. Before destroying bootstrap, you need to remove the state files from the bucket (they were deleted when you ran `terraform destroy` in app/):
+The bootstrap bucket has `force_destroy = false` to guard against accidental data loss. You must manually remove the state objects before Terraform can delete the bucket:
 
 ```bash
 cd ../bootstrap
-terraform destroy -auto-approve -var="gcp_project=YOUR_PROJECT_ID"
+BUCKET=$(terraform output -raw bucket_name)
+gcloud storage rm --recursive gs://$BUCKET/
 ```
 
-This destroys the state GCS bucket.
+**Destroy the bootstrap resources:**
+
+```bash
+terraform destroy -auto-approve -var="gcp_project=YOUR_PROJECT_ID"
+```
 
 > **Note:** After destroying the state bucket, the `app/` backend no longer has a home. That is fine — both configs are gone. If you want to rerun the lab, start from Exercise 1.
 
