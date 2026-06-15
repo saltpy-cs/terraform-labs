@@ -1,0 +1,3 @@
+aws_region   = "us-east-1"
+project_name = "tf-lab09"
+state_bucket = "tf-lab09-state-yourname"

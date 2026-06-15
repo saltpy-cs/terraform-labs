@@ -1,0 +1,4 @@
+gcp_project           = "your-project-id"
+gcp_region            = "us-central1"
+gcp_zone              = "us-central1-a"
+service_account_email = "mysa@your-project-id.iam.gserviceaccount.com"

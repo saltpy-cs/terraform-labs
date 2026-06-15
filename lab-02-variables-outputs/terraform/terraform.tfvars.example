@@ -1,0 +1,18 @@
+app_name    = "my-app"
+environment = "dev"
+
+# Uncomment and adjust as needed:
+# replica_count     = 2
+# enable_monitoring = false
+
+# instance_types = {
+#   dev     = "t3.nano"
+#   staging = "t3.small"
+#   prod    = "t3.medium"
+# }
+
+# service_config = {
+#   port     = 8080
+#   protocol = "HTTP"
+#   timeout  = 30
+# }
