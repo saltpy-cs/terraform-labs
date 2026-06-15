@@ -326,13 +326,28 @@ Expected output:
 ```yaml
 bindings:
 - members:
+  - projectEditor:your-project-id
+  - projectOwner:your-project-id
+  role: roles/storage.legacyBucketOwner
+- members:
+  - projectViewer:your-project-id
+  role: roles/storage.legacyBucketReader
+- members:
+  - projectEditor:your-project-id
+  - projectOwner:your-project-id
+  role: roles/storage.legacyObjectOwner
+- members:
+  - projectViewer:your-project-id
+  role: roles/storage.legacyObjectReader
+- members:
   - user:you@example.com
   role: roles/storage.objectAdmin
-etag: BwXxxxxxxxxxx
-version: 1
+etag: CAY=
 ```
 
-Notice two things: `roles/storage.objectViewer` is gone (the `iam_member` resource that granted it was removed), and only the members explicitly listed in the `iam_binding` appear under `roles/storage.objectAdmin`. Any other user who previously held that role on this bucket would also have been silently removed — that is what authoritative means.
+The four `legacy*` roles are automatically added by GCP to every bucket and cannot be removed — they predate fine-grained IAM and map project-level roles (Owner, Editor, Viewer) to bucket access. Ignore them for this exercise.
+
+The key entry is `roles/storage.objectAdmin` — only the member explicitly listed in the `iam_binding` appears there. `roles/storage.objectViewer` is gone because the `iam_member` resource that granted it was removed. Any other user who previously held `objectAdmin` on this bucket would also have been silently removed — that is what authoritative means.
 
 **Step 3: Restore the original configuration.**
 
