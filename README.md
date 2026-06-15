@@ -21,23 +21,58 @@ terraform version   # should be >= 1.6
 gcloud --version
 ```
 
+## GCP Project Setup
+
+Each learner needs a dedicated GCP project. The commands below create one named after
+your local username so it is easy to identify and avoids collisions with teammates.
+
+```bash
+# Build a project ID from your username.
+# GCP project IDs must be lowercase, 6–30 chars, letters/digits/hyphens, start with a letter.
+PROJECT_ID="tf-labs-$(echo "$USER" | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]-' | cut -c1-20)"
+echo "Project ID: ${PROJECT_ID}"
+```
+
+> If this ID is already taken (project IDs are globally unique), append a short suffix:
+> `PROJECT_ID="${PROJECT_ID}-01"`
+
+```bash
+# Create the project
+gcloud projects create "${PROJECT_ID}" --name="Terraform Labs (${USER})"
+
+# Link a billing account — required before any paid resources can be created.
+# This lists your open billing accounts and links the first one automatically.
+BILLING_ACCOUNT=$(gcloud billing accounts list \
+  --filter="open=true" \
+  --format="value(name)" | head -1)
+
+if [ -z "${BILLING_ACCOUNT}" ]; then
+  echo "No open billing account found."
+  echo "Create one at: https://console.cloud.google.com/billing"
+else
+  gcloud billing projects link "${PROJECT_ID}" \
+    --billing-account="${BILLING_ACCOUNT}"
+  echo "Billing linked: ${BILLING_ACCOUNT}"
+fi
+
+# Set as the active project for all subsequent gcloud and Terraform commands
+gcloud config set project "${PROJECT_ID}"
+echo "Active project: $(gcloud config get project)"
+```
+
 ## Authentication Setup
 
 All cloud labs use GCP via Application Default Credentials (ADC).
 
 ```bash
-# Authenticate your user account for ADC
+# Authenticate your user account for ADC (opens a browser)
 gcloud auth application-default login
 
-# Set the default project (required — replace with your project ID)
-gcloud config set project <your-project-id>
-```
-
-Verify access:
-
-```bash
+# Verify — should print a long access token
 gcloud auth application-default print-access-token
-gcloud projects describe <your-project-id>
+
+# Confirm the project is set correctly
+gcloud projects describe "${PROJECT_ID}"
 ```
 
 > If you use a service account instead of a user account, set
@@ -45,17 +80,25 @@ gcloud projects describe <your-project-id>
 
 ### Required GCP APIs
 
-Labs 04–09 create GCP resources. Enable the required APIs once per project:
+Enable these APIs once for your project before starting the labs. Each is free to enable.
 
 ```bash
-gcloud services enable compute.googleapis.com storage.googleapis.com
+gcloud services enable \
+  compute.googleapis.com \
+  storage.googleapis.com \
+  iam.googleapis.com \
+  servicenetworking.googleapis.com
 ```
 
-Labs 07+ also need:
+Labs 12 also requires:
 
 ```bash
-gcloud services enable iam.googleapis.com
+gcloud services enable \
+  sqladmin.googleapis.com \
+  redis.googleapis.com
 ```
+
+> Individual lab READMEs note any additional APIs they need in their Setup section.
 
 ## Cost Warning
 
