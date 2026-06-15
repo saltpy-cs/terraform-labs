@@ -151,13 +151,13 @@ Terraform state is not just a bookkeeping file — it is a recovery asset.
 
 ```bash
 # Verify state bucket versioning is on
-gsutil versioning get gs://<your-state-bucket>
+gcloud storage buckets describe gs://<your-state-bucket> --format="value(versioning)"
 
 # List all state versions (see the history)
-gsutil ls -a gs://<your-state-bucket>/lab11/
+gcloud storage ls --all-versions gs://<your-state-bucket>/lab11/
 
 # Restore a previous state version (use the #N generation suffix)
-gsutil cp "gs://<bucket>/lab11/default.tfstate#<generation>" ./terraform.tfstate
+gcloud storage cp "gs://<bucket>/lab11/default.tfstate#<generation>" ./terraform.tfstate
 ```
 
 **State and RTO**: if your disaster recovery procedure requires re-running Terraform,
@@ -175,7 +175,7 @@ gcloud auth application-default login
 gcloud config set project <your-project-id>
 
 # Create a state bucket (or reuse from lab 03)
-gsutil mb -l us-central1 gs://tf-lab11-state-$(gcloud config get-value project)
+gcloud storage buckets create gs://tf-lab11-state-$(gcloud config get-value project) --location=us-central1
 ```
 
 Copy the example vars file and fill in your values:
@@ -344,17 +344,17 @@ To reduce RTO:
 Verify that your state bucket has versioning enabled:
 
 ```bash
-gsutil versioning get gs://$(terraform output -raw state_bucket 2>/dev/null || \
-  grep state_bucket terraform.tfvars | cut -d'"' -f2)
+gcloud storage buckets describe gs://$(terraform output -raw state_bucket 2>/dev/null || \
+  grep state_bucket terraform.tfvars | cut -d'"' -f2) --format="value(versioning)"
 ```
 
-Expected output: `gs://your-bucket: Enabled`
+Expected output: `{'enabled': True}`
 
 List all state versions written so far:
 
 ```bash
 STATE_BUCKET=$(grep 'bucket' main.tf | head -1 | grep -oP '".*?"' | tr -d '"')
-gsutil ls -a gs://$STATE_BUCKET/lab11/
+gcloud storage ls --all-versions gs://$STATE_BUCKET/lab11/
 ```
 
 You'll see entries like `default.tfstate#1234567890` — each `#` suffix is a generation

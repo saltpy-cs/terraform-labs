@@ -470,7 +470,7 @@ Destroy complete! Resources: X destroyed.
 **Part A:**
 ```bash
 # Tests clean up automatically. Verify no GCS buckets remain:
-gsutil ls | grep tf-lab10
+gcloud storage ls | grep tf-lab10
 ```
 
 **Part B:**

@@ -50,7 +50,7 @@ backend "gcs" {
 
 Verify the paths after applying multiple workspaces:
 ```bash
-gsutil ls gs://my-state-bucket/lab09/
+gcloud storage ls gs://my-state-bucket/lab09/
 ```
 
 ### The `terraform.workspace` Built-in
@@ -166,8 +166,8 @@ Edit the `backend "gcs"` block in `main.tf`. Replace `YOUR_STATE_BUCKET_NAME` wi
 
 ```bash
 STATE_BUCKET="tf-lab09-state-$(gcloud config get-value project)"
-gsutil mb -l us-central1 gs://${STATE_BUCKET}
-gsutil versioning set on gs://${STATE_BUCKET}
+gcloud storage buckets create gs://${STATE_BUCKET} --location=us-central1
+gcloud storage buckets update gs://${STATE_BUCKET} --versioning
 ```
 
 Expected:
@@ -294,7 +294,7 @@ Note: a new GCE instance was created. The dev instance still exists — these ar
 
 ```bash
 STATE_BUCKET="tf-lab09-state-$(gcloud config get-value project)"
-gsutil ls gs://${STATE_BUCKET}/lab09/
+gcloud storage ls gs://${STATE_BUCKET}/lab09/
 ```
 
 Expected output (note the workspace-named subdirectories):
@@ -305,7 +305,7 @@ gs://tf-lab09-state-your-project-id/lab09/staging/
 
 Drill into a workspace directory:
 ```bash
-gsutil ls gs://${STATE_BUCKET}/lab09/dev/
+gcloud storage ls gs://${STATE_BUCKET}/lab09/dev/
 ```
 
 Expected:
@@ -449,5 +449,5 @@ terraform workspace select default
 terraform destroy -auto-approve
 
 # Optionally delete the state bucket (this is permanent)
-# gsutil rm -r gs://tf-lab09-state-$(gcloud config get-value project)
+# gcloud storage rm --recursive gs://tf-lab09-state-$(gcloud config get-value project)
 ```

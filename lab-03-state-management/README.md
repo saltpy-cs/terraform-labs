@@ -380,7 +380,7 @@ app_bucket_url  = "gs://tf-lab03-app-dev-xxxx"
 ### Exercise 5: Verify state is stored in GCS
 
 ```bash
-gsutil ls gs://<your-state-bucket-name>/
+gcloud storage ls gs://<your-state-bucket-name>/
 ```
 
 Expected output:
@@ -389,7 +389,7 @@ gs://tf-lab03-tfstate-a1b2c3d4/lab03/
 ```
 
 ```bash
-gsutil ls gs://<your-state-bucket-name>/lab03/app/
+gcloud storage ls gs://<your-state-bucket-name>/lab03/app/
 ```
 
 Expected output:
@@ -397,17 +397,10 @@ Expected output:
 gs://tf-lab03-tfstate-a1b2c3d4/lab03/app/default.tfstate
 ```
 
-You can download and read the state file directly:
+Download and read the state file directly:
 
 ```bash
-gsutil cat gs://<your-state-bucket-name>/lab03/app/default.tfstate | jq '.'
-```
-
-Or using the newer `gcloud storage` command:
-
-```bash
-gcloud storage ls gs://<your-state-bucket-name>/lab03/app/
-gcloud storage cat gs://<your-state-bucket-name>/lab03/app/default.tfstate
+gcloud storage cat gs://<your-state-bucket-name>/lab03/app/default.tfstate | jq '.'
 ```
 
 ---
@@ -499,7 +492,7 @@ State drift occurs when the real infrastructure diverges from what Terraform has
 1. In the GCP Console, navigate to **Cloud Storage > Buckets**, click on the app bucket, go to **Configuration**, and enable **Object versioning**. (Or use the CLI:)
 
 ```bash
-gsutil versioning set on gs://tf-lab03-app-dev-xxxx
+gcloud storage buckets update gs://tf-lab03-app-dev-xxxx --versioning
 ```
 
 2. Run `terraform state show google_storage_bucket.app_data` again — Terraform still shows `versioning.enabled = false`. State has not been refreshed yet.
@@ -582,7 +575,7 @@ SUFFIX=$(date +%s | tail -c 5)
 MANUAL_BUCKET="tf-lab03-manual-${SUFFIX}"
 echo "Manual bucket name: $MANUAL_BUCKET"
 
-gsutil mb gs://$MANUAL_BUCKET
+gcloud storage buckets create gs://$MANUAL_BUCKET
 ```
 
 Expected output:
