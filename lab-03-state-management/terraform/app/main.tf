@@ -11,26 +11,19 @@ terraform {
   }
 
   # ---------------------------------------------------------------------------
-  # REMOTE BACKEND CONFIGURATION
+  # REMOTE BACKEND — partial configuration
   #
-  # Fill in the bucket value from the bootstrap output before running
-  # `terraform init` in this directory:
+  # The bucket name is intentionally omitted here to avoid committing
+  # project-specific values. Pass it at init time:
   #
-  #   terraform -chdir=../bootstrap output bucket_name
-  #
-  # Then replace REPLACE_WITH_BUCKET_NAME below.
-  #
-  # Alternative — pass via -backend-config flags at init time (useful in CI):
-  #
-  #   terraform init \
-  #     -backend-config="bucket=tf-lab03-tfstate-a1b2c3d4"
+  #   BUCKET=$(terraform -chdir=../bootstrap output -raw bucket_name)
+  #   terraform init -backend-config="bucket=${BUCKET}"
   #
   # GCS locking: unlike the AWS S3 backend (which requires a separate DynamoDB
   # table), the GCS backend provides locking natively using a conditional write
   # on the state object generation. No lock table is needed.
   # ---------------------------------------------------------------------------
   backend "gcs" {
-    bucket = "REPLACE_WITH_BUCKET_NAME" # Replace with output from bootstrap: terraform -chdir=../bootstrap output bucket_name
     prefix = "lab03/app"
   }
 }

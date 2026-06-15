@@ -306,40 +306,30 @@ jq '[.resources[] | select(.type == "google_storage_bucket")]' terraform.tfstate
 
 ---
 
-### Exercise 3: Configure the GCS backend in `app/`
+### Exercise 3: Understand the partial backend configuration in `app/`
 
-Open `terraform/app/main.tf`. Find the `backend "gcs"` block. It currently has a placeholder bucket value.
-
-Replace `REPLACE_WITH_BUCKET_NAME` with the bucket name from Exercise 1:
+Open `terraform/app/main.tf`. Find the `backend "gcs"` block:
 
 ```hcl
 backend "gcs" {
-  bucket = "tf-lab03-tfstate-a1b2c3d4"   # your actual bucket name
   prefix = "lab03/app"
 }
 ```
 
-Save the file.
+Notice that the `bucket` attribute is **intentionally absent**. This is called a **partial backend configuration**. Terraform backend blocks are evaluated before providers and variables load, so they cannot use variable interpolation (e.g. `bucket = var.state_bucket` would be a syntax error). Hardcoding a bucket name in the block would mean committing a project-specific value to the repository.
 
-You can also get the value programmatically:
-
-```bash
-terraform -chdir=../bootstrap output bucket_name
-```
+The solution is to omit `bucket` from the block entirely and pass it at init time via `-backend-config`. This keeps the repository generic while each learner supplies their own bucket name at the CLI.
 
 ---
 
 ### Exercise 4: Initialize the app with the remote backend
 
+Fetch the bucket name from the bootstrap output and pass it to `terraform init`:
+
 ```bash
 cd ../app
-terraform init -var="gcp_project=YOUR_PROJECT_ID"
-```
-
-Wait — `terraform init` does not accept `-var` flags. Variables are used by providers and resources, not by the backend itself. The GCS backend authenticates via ADC automatically. Just run:
-
-```bash
-terraform init
+BUCKET=$(terraform -chdir=../bootstrap output -raw bucket_name)
+terraform init -backend-config="bucket=${BUCKET}"
 ```
 
 Expected output:
