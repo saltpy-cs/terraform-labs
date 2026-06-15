@@ -187,7 +187,7 @@ google_compute_instance.app
 
 2. Find your public IP:
    ```bash
-   curl -s https://checkip.amazonaws.com
+   curl ifconfig.me
    ```
 
 3. Create `terraform/terraform.tfvars`:
