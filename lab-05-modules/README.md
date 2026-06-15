@@ -399,4 +399,12 @@ cd terraform
 terraform destroy -auto-approve
 ```
 
-Verify in the GCP Console that no Compute Engine instances, networks, or firewall rules remain.
+Verify nothing remains:
+
+```bash
+gcloud compute instances list --filter="name~tf-lab05"
+gcloud compute networks list --filter="name~tf-lab05"
+gcloud compute firewall-rules list --filter="name~tf-lab05"
+```
+
+All three commands should return no output.
