@@ -120,8 +120,9 @@ cat .terraform.lock.hcl
 ```
 
 The `.terraform/` directory holds the downloaded provider binary. The lock file holds
-checksums. The `.terraform/` dir is in `.gitignore` (re-downloadable); the lock file
-should be committed (pins exact versions).
+checksums. Both are gitignored in this course repo (each learner generates their own on
+`init`). In your own projects, commit `.terraform.lock.hcl` to pin exact provider versions
+across your team — but keep `.terraform/` gitignored since it is re-downloadable.
 
 ### Exercise 2 — Read the plan
 
@@ -290,7 +291,7 @@ You'll see `"resources": []` — the state is empty, not deleted.
 - `terraform plan` is safe and should always be read before applying
 - `+` = create, `~` = update in-place, `-` = destroy, `-/+` = destroy and recreate
 - The state file is the source of truth for what Terraform manages — never edit it directly
-- Commit `.terraform.lock.hcl` to git; add `.terraform/` to `.gitignore`
+- In your own projects, commit `.terraform.lock.hcl` and gitignore `.terraform/`
 - `(known after apply)` values are determined by the provider at creation time
 
 ## Cleanup
