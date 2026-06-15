@@ -134,13 +134,6 @@ Read the output carefully:
 ```
 Terraform will perform the following actions:
 
-  # random_pet.name will be created
-  + resource "random_pet" "name" {
-      + id        = (known after apply)
-      + length    = 2
-      + separator = "-"
-    }
-
   # null_resource.hello will be created
   + resource "null_resource" "hello" {
       + id       = (known after apply)
@@ -149,13 +142,29 @@ Terraform will perform the following actions:
         }
     }
 
-Plan: 2 to add, 0 to change, 0 to destroy.
+  # random_pet.name will be created
+  + resource "random_pet" "name" {
+      + id        = (known after apply)
+      + length    = 2
+      + separator = "-"
+    }
+
+  # random_string.suffix will be created
+  + resource "random_string" "suffix" {
+      + id      = (known after apply)
+      + length  = 8
+      + result  = (known after apply)
+      ...
+    }
+
+Plan: 3 to add, 0 to change, 0 to destroy.
 ```
 
 Key observations:
 - `+` means "will be created"
-- `(known after apply)` means the value is determined by the cloud provider, not Terraform
+- `(known after apply)` means the value is determined by the provider at creation time, not during plan
 - Dependencies are shown implicitly: `null_resource.hello` triggers reference `random_pet.name.id`, so `random_pet.name` will be created first
+- `random_string.suffix` has no dependencies — it and `random_pet.name` can be created in parallel
 
 ### Exercise 3 — Apply the configuration
 
