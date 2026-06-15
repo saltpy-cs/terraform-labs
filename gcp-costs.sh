@@ -38,6 +38,7 @@ echo "--- Budgets ---"
 BUDGETS_OUTPUT=$(gcloud billing budgets list \
   --billing-account="$BILLING_ACCOUNT_ID" \
   --format="table(displayName,amount.specifiedAmount.units:label=LIMIT_USD)" \
+  --quiet \
   2>&1 || true)
 
 if echo "$BUDGETS_OUTPUT" | grep -q "API.*not enabled\|permission\|disabled"; then
