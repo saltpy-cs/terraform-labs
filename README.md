@@ -26,6 +26,12 @@ gcloud --version
 Each learner needs a dedicated GCP project. The commands below create one named after
 your local username so it is easy to identify and avoids collisions with teammates.
 
+> **First-time GCP account?** Before the CLI can create projects, you must accept Google
+> Cloud's Terms of Service through the browser. Visit **https://console.cloud.google.com/**,
+> sign in with the same account you will use for `gcloud auth login`, and accept the ToS
+> when prompted. You do not need to create anything in the console — just accept and then
+> return here.
+
 ```bash
 # Build a project ID from your username.
 # GCP project IDs must be lowercase, 6–30 chars, letters/digits/hyphens, start with a letter.
