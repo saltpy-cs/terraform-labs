@@ -359,14 +359,28 @@ Switch back to `google_storage_bucket_iam_member` resources as originally define
 terraform state show google_storage_bucket.europe
 ```
 
-Expected output includes the provider reference:
+Expected output (fields are shown alphabetically by the google provider v6):
 
 ```
 # google_storage_bucket.europe:
 resource "google_storage_bucket" "europe" {
-    id       = "tf-lab07-xxxx-eu"
-    location = "EU"
-    name     = "tf-lab07-xxxx-eu"
+    autoclass                = []
+    cors                     = []
+    default_event_based_hold = false
+    effective_labels         = {
+        "lab"        = "07"
+        "managed_by" = "terraform"
+        "region"     = "europe"
+    }
+    force_destroy            = true
+    id                       = "tf-lab07-xxxx-eu"
+    labels                   = {
+        "lab"        = "07"
+        "managed_by" = "terraform"
+        "region"     = "europe"
+    }
+    location                 = "EU"
+    name                     = "tf-lab07-xxxx-eu"
     ...
 }
 ```
