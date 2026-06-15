@@ -486,21 +486,21 @@ terraform destroy -auto-approve
 Observe the reverse dependency order in the output:
 
 ```
-google_compute_instance.main: Destroying...
-google_compute_instance.main: Destruction complete after 20s
-google_compute_subnetwork.public: Destroying...
-google_compute_firewall.allow_ssh: Destroying...
 google_compute_firewall.allow_egress: Destroying...
-google_compute_subnetwork.public: Destruction complete after 8s
-google_compute_firewall.allow_ssh: Destruction complete after 8s
-google_compute_firewall.allow_egress: Destruction complete after 8s
+google_compute_firewall.allow_ssh: Destroying...
+google_compute_instance.main: Destroying...
+google_compute_firewall.allow_ssh: Destruction complete after 11s
+google_compute_firewall.allow_egress: Destruction complete after 11s
+google_compute_instance.main: Destruction complete after 23s
+google_compute_subnetwork.public: Destroying...
+google_compute_subnetwork.public: Destruction complete after 13s
 google_compute_network.main: Destroying...
-google_compute_network.main: Destruction complete after 10s
+google_compute_network.main: Destruction complete after 22s
 
 Destroy complete! Resources: 5 destroyed.
 ```
 
-The instance is destroyed first (it depends on everything else), then the subnet and firewalls in parallel, then the network last. The dependency graph runs in reverse for destruction.
+The firewalls and instance are all **leaves** in the dependency graph (nothing depends on them), so Terraform destroys them in parallel. The subnet waits until the instance is gone, then the network waits until the subnet is gone. Destruction is the reverse of creation — the network was created first and is destroyed last.
 
 ---
 
@@ -509,6 +509,6 @@ The instance is destroyed first (it depends on everything else), then the subnet
 - **GCP networking is simpler than AWS** for basic internet access — no internet gateway resource, no route table resources. An instance with a public IP has internet access automatically.
 - **`google_compute_firewall` belongs to the VPC**, not the instance. Rules are applied to instances via `target_tags`. This means a single firewall rule can apply to many instances just by adding the tag.
 - **Data sources** (`data "google_compute_image"`) resolve existing GCP resources at plan time without managing them. Always use image families instead of hardcoded names so your config automatically tracks the latest patched image.
-- **`machine_type` changes force instance replacement** (`-/+`) in GCP. The external IP changes and local disks are wiped. Plan machine sizing carefully before deploying production instances.
+- **`machine_type` changes require a VM stop/start** (`~`) in GCP provider v6+, not a full replacement. The external IP and disks are preserved, but there is downtime. Changes that do force replacement (`-/+`) include renaming the instance or changing its `zone`. Plan machine sizing carefully before deploying production instances.
 - **`gcloud compute ssh`** handles SSH key injection automatically — no key pair Terraform resource is needed.
 - **Implicit dependencies** are expressed through attribute references (`google_compute_subnetwork.public.id`). Use `depends_on` only when a real dependency exists but cannot be expressed through a reference.
