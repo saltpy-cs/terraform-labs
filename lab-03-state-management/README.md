@@ -545,7 +545,9 @@ Move "google_storage_bucket.app_data" to "google_storage_bucket.primary"
 Successfully moved 1 object(s).
 ```
 
-**Step 2:** Update `main.tf` — rename the resource block label from `app_data` to `primary`. Update `outputs.tf` to reference `google_storage_bucket.primary`.
+**Step 2:** Update `main.tf` — rename **only** the resource block label from `app_data` to `primary`. Update `outputs.tf` to reference `google_storage_bucket.primary`.
+
+> Be careful with find-replace here: only the resource label should change, not the `backend "gcs"` bucket name or anything else in the `terraform {}` block.
 
 **Step 3:** Verify no destroy/recreate:
 
@@ -565,6 +567,8 @@ terraform state mv google_storage_bucket.primary google_storage_bucket.app_data
 ```
 
 Revert the name change in `main.tf` and `outputs.tf`.
+
+> **If you see `Backend initialization required, please run "terraform init": Backend configuration block has changed`** — the backend `bucket` value was accidentally changed during step 2 editing. Check that the `backend "gcs" { bucket = "..." }` value in `main.tf` still matches the bucket name from Exercise 1, then run `terraform init` to re-sync.
 
 ---
 
