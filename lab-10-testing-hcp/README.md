@@ -385,28 +385,36 @@ Terraform Cloud has been successfully initialized!
 ### Exercise 9 — Configure Workspace Variables
 
 In the HCP Terraform UI:
-1. Select your workspace, then click the **Variables** tab in the top navigation bar (alongside Overview, Runs, States, Settings).
-2. On the Variables page there are two sections — **Terraform Variables** and **Environment Variables**. Scroll down to **Environment Variables** and click **+ Add variable**.
-3. Add an **Environment variable**:
-   - `GOOGLE_CREDENTIALS` = the full JSON content of a GCP service account key file (mark as **Sensitive**)
+1. Select your workspace, then click the **Variables** tab in the top navigation bar.
+2. Under **Workspace Variables**, click **Add variable**. A form appears with a **Variable category** selector — choose **Environment variable** for `GOOGLE_CREDENTIALS` and **Terraform variable** for `gcp_project`.
 
-   To generate a service account key:
-   ```bash
-   gcloud iam service-accounts create tf-lab10-runner \
-     --display-name "Terraform Lab 10 Runner"
+Add these two variables:
 
-   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-     --member "serviceAccount:tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
-     --role "roles/storage.admin"
+**Variable 1 — GCP credentials (Environment variable):**
+- Category: **Environment variable**
+- Key: `GOOGLE_CREDENTIALS`
+- Value: the full JSON content of a GCP service account key file
+- Check **Sensitive**
 
-   gcloud iam service-accounts keys create key.json \
-     --iam-account tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com
+To generate a service account key:
+```bash
+gcloud iam service-accounts create tf-lab10-runner \
+  --display-name "Terraform Lab 10 Runner"
 
-   cat key.json  # copy this entire JSON as the variable value
-   ```
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member "serviceAccount:tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role "roles/storage.admin"
 
-3. Add a **Terraform variable**:
-   - `gcp_project` = your GCP project ID
+gcloud iam service-accounts keys create key.json \
+  --iam-account tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com
+
+cat key.json  # copy this entire JSON as the variable value
+```
+
+**Variable 2 — Project ID (Terraform variable):**
+- Category: **Terraform variable**
+- Key: `gcp_project`
+- Value: your GCP project ID
 
 These variables are stored encrypted and injected into the remote runner environment. They never appear in your git repository or plan output.
 
