@@ -513,7 +513,15 @@ Destroy complete! Resources: X destroyed.
 terraform destroy -auto-approve
 ```
 
-In the HCP Terraform UI: optionally delete the workspace and organisation if no longer needed.
+In the HCP Terraform UI, delete the workspace:
+
+1. Open your workspace → **Settings** → **Destruction and Deletion**.
+2. Click **Delete workspace** and confirm. This removes the workspace and its stored state from HCP Terraform.
+
+Optionally delete the organisation if you no longer need it:
+
+1. From the organisation overview, click **Settings** in the left sidebar.
+2. Scroll to **Delete organisation** and confirm.
 
 **Verify everything is gone** (Part A tests clean up automatically; this confirms both parts are clear):
 ```bash
