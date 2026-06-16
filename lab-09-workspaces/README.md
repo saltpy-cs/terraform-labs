@@ -92,6 +92,8 @@ When the workspace maps to `prod`, `machine_type = "e2-small"`. For any other wo
 
 ### Workspace Commands
 
+These are for reference — the exercises walk through each command in context.
+
 ```bash
 # Show current workspace
 terraform workspace show
