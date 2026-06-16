@@ -213,7 +213,8 @@ resource "google_compute_region_backend_service" "app" {
   health_checks         = [google_compute_region_health_check.app.id]
 
   backend {
-    group = google_compute_region_instance_group_manager.app.instance_group
+    group           = google_compute_region_instance_group_manager.app.instance_group
+    balancing_mode  = "CONNECTION"
   }
 }
 
