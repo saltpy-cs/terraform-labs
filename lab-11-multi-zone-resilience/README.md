@@ -192,6 +192,11 @@ cp terraform.tfvars.example terraform.tfvars
 
 ## Exercises
 
+> **macOS prerequisite**: several exercises use `watch` to poll GCP until a condition
+> is met. macOS does not ship `watch`; install it once with `brew install watch`.
+> If you prefer not to, the equivalent shell loop is:
+> `while true; do clear; <command>; sleep <N>; done`
+
 ### Exercise 1 — Initialise and plan
 
 The backend uses partial configuration — pass the bucket name at init time:
