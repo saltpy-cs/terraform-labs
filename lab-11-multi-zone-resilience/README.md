@@ -150,7 +150,7 @@ Terraform state is not just a bookkeeping file — it is a recovery asset.
 
 ```bash
 # Verify state bucket versioning is on
-gcloud storage buckets describe gs://<your-state-bucket> --format="value(versioning)"
+gcloud storage buckets describe gs://<your-state-bucket> --format="value(versioning_enabled)"
 
 # List all state versions (see the history)
 gcloud storage ls --all-versions gs://<your-state-bucket>/lab11/
@@ -390,10 +390,10 @@ gcloud storage buckets update gs://$STATE_BUCKET --versioning
 Verify it's now enabled:
 
 ```bash
-gcloud storage buckets describe gs://$STATE_BUCKET --format="value(versioning)"
+gcloud storage buckets describe gs://$STATE_BUCKET --format="value(versioning_enabled)"
 ```
 
-Expected output: `{'enabled': True}`
+Expected output: `True`
 
 List all state versions written so far:
 
