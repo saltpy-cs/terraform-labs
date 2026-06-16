@@ -30,9 +30,7 @@ The GCS backend stores workspace state under `<prefix>/<workspace>/default.tfsta
 ```
 gs://your-bucket/lab09/
 ├── default/
-│   └── default.tfstate    ← default workspace state
-├── dev/
-│   └── default.tfstate    ← dev workspace state
+│   └── default.tfstate    ← default workspace (treated as dev)
 ├── staging/
 │   └── default.tfstate    ← staging workspace state
 └── prod/
@@ -216,31 +214,9 @@ Expected:
 
 The `*` marks the currently selected workspace.
 
-### Exercise 4 — Create and Switch to Dev Workspace
+### Exercise 4 — Apply in Default Workspace
 
-```bash
-terraform workspace new dev
-```
-
-Expected:
-```
-Created and switched to workspace "dev"!
-...
-```
-
-```bash
-terraform workspace list
-```
-
-Expected:
-```
-  default
-* dev
-```
-
-The `*` has moved to `dev`.
-
-### Exercise 5 — Apply in Dev Workspace
+You are on the `default` workspace. The `local.env` in `main.tf` maps `default → "dev"`, so resources are named as if you were in a dev environment — without creating a separate workspace:
 
 ```bash
 terraform apply -auto-approve
@@ -250,27 +226,27 @@ Expected output includes:
 ```
 Outputs:
 
-workspace          = "dev"
+workspace          = "default"
 machine_type_used  = "e2-micro"
 instance_name      = "tf-lab09-dev-instance"
 environment_summary = {
   "instance"     = "tf-lab09-dev-instance"
   "machine_type" = "e2-micro"
-  "workspace"    = "dev"
+  "workspace"    = "default"
 }
 ```
 
-Notice `machine_type_used = "e2-micro"` — the `lookup()` matched `dev`.
+`workspace = "default"` is the raw workspace name, but `instance_name = "tf-lab09-dev-instance"` — the `default → "dev"` mapping in `local.env` has named the resources as dev. This is the recommended pattern: use `default` as your development environment rather than creating a separate `dev` workspace, since `default` can never be deleted.
 
-### Exercise 6 — Inspect the Environment Summary Output
+### Exercise 5 — Inspect the Environment Summary
 
 ```bash
 terraform output environment_summary
 ```
 
-Observe the map output showing all three values together. The `workspace` key shows the raw workspace name; `machine_type` shows what `lookup()` resolved it to.
+Observe that `workspace` shows `"default"` (the raw workspace name) while `instance` shows `"tf-lab09-dev-instance"`. The `local.env` mapping is the bridge: `terraform.workspace == "default" ? "dev" : terraform.workspace`. The `machine_type` key shows what `lookup()` resolved for this workspace.
 
-### Exercise 7 — Create and Apply Staging Workspace
+### Exercise 6 — Create and Apply Staging Workspace
 
 ```bash
 terraform workspace new staging
@@ -284,9 +260,9 @@ machine_type_used  = "e2-micro"
 instance_name      = "tf-lab09-staging-instance"
 ```
 
-Note: a new GCE instance was created. The dev instance still exists — these are completely independent state files.
+A new GCE instance was created. The default workspace's dev instance still exists — these are completely independent state files.
 
-### Exercise 8 — Verify GCS State Paths
+### Exercise 7 — Verify GCS State Paths
 
 ```bash
 STATE_BUCKET="tf-lab09-state-$(gcloud config get-value project)"
@@ -295,31 +271,31 @@ gcloud storage ls gs://${STATE_BUCKET}/lab09/
 
 Expected output (note the workspace-named subdirectories):
 ```
-gs://tf-lab09-state-your-project-id/lab09/dev/
+gs://tf-lab09-state-your-project-id/lab09/default/
 gs://tf-lab09-state-your-project-id/lab09/staging/
 ```
 
-Drill into a workspace directory:
+Drill into the default workspace directory:
 ```bash
-gcloud storage ls gs://${STATE_BUCKET}/lab09/dev/
+gcloud storage ls gs://${STATE_BUCKET}/lab09/default/
 ```
 
 Expected:
 ```
-gs://tf-lab09-state-your-project-id/lab09/dev/default.tfstate
+gs://tf-lab09-state-your-project-id/lab09/default/default.tfstate
 ```
 
 This is the GCS path pattern: `<prefix>/<workspace>/default.tfstate`. Compare this to the S3 backend which uses `env:/<workspace>/<key>`.
 
-### Exercise 9 — State Isolation Demo
+### Exercise 8 — State Isolation Demo
 
-Switch to dev and list resources:
+List resources in the default workspace:
 ```bash
-terraform workspace select dev
+terraform workspace select default
 terraform state list
 ```
 
-Expected: only dev resources (VPC, subnet, instance with dev naming).
+Expected: only default workspace resources (VPC, subnet, instance with dev naming).
 
 Switch to staging and list resources:
 ```bash
@@ -327,11 +303,11 @@ terraform workspace select staging
 terraform state list
 ```
 
-Expected: only staging resources — the dev resources are not visible from here.
+Expected: only staging resources — the default workspace's resources are not visible from here.
 
 This demonstrates that `terraform state list` operates only on the current workspace's state file.
 
-### Exercise 10 — Machine Type Variation
+### Exercise 9 — Machine Type Variation
 
 Create a `prod` workspace and run a plan:
 ```bash
@@ -344,7 +320,7 @@ Observe in the plan output:
 + machine_type = "e2-small"
 ```
 
-The `lookup()` in `locals` matched `prod` → `e2-small`. The dev and staging instances use `e2-micro`.
+The `lookup()` in `locals` matched `prod` → `e2-small`. The default (dev) and staging instances use `e2-micro`.
 
 **Do not apply in the prod workspace** unless you are comfortable with the e2-small cost. If you do apply, run `terraform destroy` immediately after observing the output.
 
@@ -358,7 +334,7 @@ Expected:
 + machine_type = "e2-small"
 ```
 
-### Exercise 11 — Selective Destroy (Staging Only)
+### Exercise 10 — Selective Destroy (Staging Only)
 
 Switch to staging and destroy:
 ```bash
@@ -368,42 +344,38 @@ terraform destroy -auto-approve
 
 Expected: staging resources destroyed.
 
-Verify dev resources are unaffected:
+Verify default workspace resources are unaffected:
 ```bash
-terraform workspace select dev
+terraform workspace select default
 terraform state list
 ```
 
-Expected: dev resources still listed. Only staging was destroyed.
+Expected: default workspace resources still listed. Only staging was destroyed.
 
-### Exercise 12 — Delete Workspaces and Full Cleanup
+### Exercise 11 — Delete Workspaces and Full Cleanup
 
 Destroy all remaining workspaces:
 
 ```bash
-# Destroy prod (if you applied it)
+# Destroy prod (only if you applied it in Exercise 9)
 terraform workspace select prod
-terraform destroy -auto-approve  # only if prod was applied
-
-# Destroy dev
-terraform workspace select dev
 terraform destroy -auto-approve
 
-# Switch back to default (staging was already destroyed in Exercise 11)
+# Switch back to default and destroy dev resources
 terraform workspace select default
+terraform destroy -auto-approve
 ```
 
-Delete the now-empty workspaces (you must not be in the workspace you are deleting):
+Delete the now-empty non-default workspaces (you must not be in the workspace you are deleting):
 ```bash
 terraform workspace select default
-terraform workspace delete dev
 terraform workspace delete staging
 terraform workspace delete prod  # if it was created
 ```
 
 Expected:
 ```
-Deleted workspace "dev"!
+Deleted workspace "staging"!
 ```
 
 Verify only `default` remains:
@@ -425,7 +397,7 @@ Expected:
 - **`lookup()` enables per-workspace configuration** — different machine types, sizes, or counts without duplicating code.
 - **GCS workspace state paths** follow the pattern `<prefix>/<workspace>/default.tfstate`. This differs from S3's `env:/<workspace>/<key>` pattern. Terraform manages the routing automatically.
 - **Workspace isolation is state-level only** — all workspaces share the same GCS bucket and GCP project credentials. For permission isolation, use separate GCP projects and backends.
-- **The `default` workspace cannot be deleted.** Treat it as a baseline or development environment.
+- **The `default` workspace cannot be deleted.** Treat it as your development environment and map it to `"dev"` via `local.env = terraform.workspace == "default" ? "dev" : terraform.workspace`. This avoids an orphaned `dev` workspace that mirrors `default`.
 - **Use separate root modules** (not workspaces) when environments have significantly different infrastructure, different teams, or compliance isolation requirements.
 
 ---
@@ -433,14 +405,14 @@ Expected:
 ## Cleanup
 
 ```bash
-# Destroy resources in each workspace, then delete the workspace
-for ws in dev staging prod; do
+# Destroy resources in each non-default workspace, then delete the workspace
+for ws in staging prod; do
   terraform workspace select $ws 2>/dev/null && terraform destroy -auto-approve 2>/dev/null
   terraform workspace select default
   terraform workspace delete $ws 2>/dev/null
 done
 
-# Destroy default workspace resources (if anything was applied there)
+# Destroy default workspace resources
 terraform workspace select default
 terraform destroy -auto-approve
 
