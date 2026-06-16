@@ -37,10 +37,9 @@ Cloud SQL REGIONAL and Memorystore STANDARD_HA are both **Active-Passive**: one 
 
 ### RTO and RPO
 
-Two metrics define recovery quality:
-
-- **RPO (Recovery Point Objective):** How much data can you lose? Measured in time since the last durable write.
-- **RTO (Recovery Time Objective):** How long can the service be unavailable?
+RTO and RPO were introduced in Lab 11. This lab applies them to stateful services
+where the numbers look very different — synchronous replication changes the story
+significantly:
 
 | Service | Configuration | RPO | RTO |
 |---|---|---|---|
