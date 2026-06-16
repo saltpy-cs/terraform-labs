@@ -345,12 +345,12 @@ terraform plan | grep machine_type
 
 Expected (3 matches — the resource attribute plus the two outputs that reference it):
 ```
-      + machine_type                  = "e2-small"
-      + machine_type_used             = "e2-small"
-          + machine_type              = "e2-small"
+      + machine_type         = "e2-small"
+      + machine_type = "e2-small"
+  + machine_type_used   = "e2-small"
 ```
 
-The first line (from `google_compute_instance.app`) is the key one — it confirms the `lookup()` resolved `prod` → `e2-small`.
+The first line (from `google_compute_instance.app`) and second (from `environment_summary`) confirm the `lookup()` resolved `prod` → `e2-small`. The third is the `machine_type_used` output.
 
 ### Exercise 10 — Selective Destroy (Staging Only)
 
