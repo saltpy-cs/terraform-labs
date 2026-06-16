@@ -48,9 +48,10 @@ backend "gcs" {
 }
 ```
 
-Verify the paths after applying multiple workspaces:
+Exercise 5 verifies this layout once workspaces are applied:
 ```bash
-gcloud storage ls gs://my-state-bucket/lab09/
+STATE_BUCKET="tf-lab09-state-$(gcloud config get-value project)"
+gcloud storage ls gs://${STATE_BUCKET}/lab09/
 ```
 
 ### The `terraform.workspace` Built-in
