@@ -68,7 +68,7 @@ do when one isn't:
 
 ```hcl
 auto_healing_policies {
-  health_check      = google_compute_health_check.app.id
+  health_check      = google_compute_region_health_check.app.id
   initial_delay_sec = 300
 }
 ```

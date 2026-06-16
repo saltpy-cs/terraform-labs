@@ -120,10 +120,10 @@ resource "google_compute_instance_template" "app" {
 
 # ── Health Check ─────────────────────────────────────────────────────────────
 
-# A single global health check is reused for both MIG auto-healing and the
-# load balancer backend service.
-resource "google_compute_health_check" "app" {
-  name = "${var.project_name}-hc"
+# Regional health check — required by regional NLB and reused for MIG auto-healing.
+resource "google_compute_region_health_check" "app" {
+  name   = "${var.project_name}-hc"
+  region = var.gcp_region
 
   http_health_check {
     port         = 80
@@ -164,7 +164,7 @@ resource "google_compute_region_instance_group_manager" "app" {
   # initial_delay_sec gives instances time to finish the startup script
   # before health checks begin — prevents premature replacement.
   auto_healing_policies {
-    health_check      = google_compute_health_check.app.id
+    health_check      = google_compute_region_health_check.app.id
     initial_delay_sec = 300
   }
 
@@ -210,7 +210,7 @@ resource "google_compute_region_backend_service" "app" {
   region                = var.gcp_region
   protocol              = "TCP"
   load_balancing_scheme = "EXTERNAL"
-  health_checks         = [google_compute_health_check.app.id]
+  health_checks         = [google_compute_region_health_check.app.id]
 
   backend {
     group = google_compute_region_instance_group_manager.app.instance_group
