@@ -413,7 +413,9 @@ monotonically increasing integer assigned to every object write. Versioning keep
 all of them rather than overwriting the previous one.
 
 > If you only see one entry, versioning was enabled after your first apply. Run
-> `terraform apply -auto-approve` again and re-run the `ls` — you should see two.
+> `terraform apply -auto-approve` again and re-run the `ls` — you should see more.
+> Terraform writes state multiple times per operation (lock, update, unlock), so
+> expect several new entries per apply, not just one.
 
 Simulate accidental state corruption — remove a resource from state without destroying it:
 
