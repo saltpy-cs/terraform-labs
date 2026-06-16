@@ -522,9 +522,13 @@ gcloud storage ls 2>/dev/null | grep tf-lab10 || echo "No tf-lab10 buckets found
 
 If you created a service account key for Exercise 9, delete it:
 ```bash
-# List keys and delete
+SA="tf-lab10-runner@$(gcloud config get-value project).iam.gserviceaccount.com"
 gcloud iam service-accounts keys list \
-  --iam-account tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com
-gcloud iam service-accounts keys delete KEY_ID \
-  --iam-account tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com
+  --iam-account "$SA" \
+  --managed-by user \
+  --format="value(name)" \
+  | xargs -I{} gcloud iam service-accounts keys delete {} \
+      --iam-account "$SA" --quiet
 ```
+
+`--managed-by user` skips the system-managed keys GCP creates automatically — only the key you generated in Exercise 9 is deleted.
