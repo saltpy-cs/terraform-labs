@@ -9,10 +9,6 @@ terraform {
   }
 
   backend "gcs" {
-    # Replace with your bucket name before running terraform init.
-    # Create one with: gsutil mb -l us-central1 gs://YOUR_BUCKET_NAME
-    # Or reuse the bucket created in lab 03.
-    bucket = "YOUR_STATE_BUCKET_NAME"
     prefix = "lab11"
   }
 }

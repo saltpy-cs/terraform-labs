@@ -59,8 +59,3 @@ variable "my_ip_cidr" {
   type        = string
   description = "Your public IP in CIDR notation (e.g. 1.2.3.4/32). Used to restrict SSH access. Find it with: curl ifconfig.me"
 }
-
-variable "state_bucket" {
-  type        = string
-  description = "GCS bucket name to use for Terraform remote state. Create one first or reuse from lab 03."
-}

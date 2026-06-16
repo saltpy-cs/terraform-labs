@@ -173,8 +173,9 @@ gcloud services enable compute.googleapis.com storage.googleapis.com
 gcloud auth application-default login
 gcloud config set project <your-project-id>
 
-# Create a state bucket (or reuse from lab 03)
-gcloud storage buckets create gs://tf-lab11-state-$(gcloud config get-value project) --location=us-central1
+# Create a state bucket (or reuse from a previous lab)
+STATE_BUCKET="tf-lab11-state-$(gcloud config get-value project)"
+gcloud storage buckets create gs://$STATE_BUCKET --location=us-central1
 ```
 
 Copy the example vars file and fill in your values:
@@ -182,10 +183,8 @@ Copy the example vars file and fill in your values:
 ```bash
 cd lab-11-multi-zone-resilience/terraform
 cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars — set gcp_project, state_bucket, my_ip_cidr
+# Edit terraform.tfvars — set gcp_project and my_ip_cidr
 ```
-
-Then update the `backend "gcs"` block in `main.tf` with your state bucket name.
 
 > **Cost warning**: This lab creates an external forwarding rule (~$0.025/hr),
 > 3× e2-micro instances (free tier covers one; the others are ~$0.01/hr combined),
@@ -195,8 +194,11 @@ Then update the `backend "gcs"` block in `main.tf` with your state bucket name.
 
 ### Exercise 1 — Initialise and plan
 
+The backend uses partial configuration — pass the bucket name at init time:
+
 ```bash
-terraform init
+STATE_BUCKET="tf-lab11-state-$(gcloud config get-value project)"
+terraform init -backend-config="bucket=${STATE_BUCKET}"
 terraform plan
 ```
 
@@ -343,8 +345,8 @@ To reduce RTO:
 Verify that your state bucket has versioning enabled:
 
 ```bash
-gcloud storage buckets describe gs://$(terraform output -raw state_bucket 2>/dev/null || \
-  grep state_bucket terraform.tfvars | cut -d'"' -f2) --format="value(versioning)"
+STATE_BUCKET="tf-lab11-state-$(gcloud config get-value project)"
+gcloud storage buckets describe gs://$STATE_BUCKET --format="value(versioning)"
 ```
 
 Expected output: `{'enabled': True}`
@@ -352,7 +354,6 @@ Expected output: `{'enabled': True}`
 List all state versions written so far:
 
 ```bash
-STATE_BUCKET=$(grep 'bucket' main.tf | head -1 | grep -oP '".*?"' | tr -d '"')
 gcloud storage ls --all-versions gs://$STATE_BUCKET/lab11/
 ```
 
