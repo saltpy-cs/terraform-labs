@@ -542,4 +542,4 @@ gcloud compute forwarding-rules list | grep tf-lab11 || echo "OK: no forwarding 
 gcloud compute instance-groups managed list | grep tf-lab11 || echo "OK: no instance groups"
 ```
 
-Both commands should return no output.
+Both commands should print the `OK:` message, confirming nothing remains.
