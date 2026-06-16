@@ -509,18 +509,17 @@ Destroy complete! Resources: X destroyed.
 
 ## Cleanup
 
-**Part A:**
-```bash
-# Tests clean up automatically. Verify no GCS buckets remain:
-gcloud storage ls 2>/dev/null | grep tf-lab10 || echo "No tf-lab10 buckets found (expected)"
-```
-
-**Part B:**
+**Part B — destroy remote resources:**
 ```bash
 terraform destroy -auto-approve
 ```
 
 In the HCP Terraform UI: optionally delete the workspace and organisation if no longer needed.
+
+**Verify everything is gone** (Part A tests clean up automatically; this confirms both parts are clear):
+```bash
+gcloud storage ls 2>/dev/null | grep tf-lab10 || echo "No tf-lab10 buckets found (expected)"
+```
 
 If you created a service account key for Exercise 9, delete it:
 ```bash
