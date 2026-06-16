@@ -308,17 +308,17 @@ The `terraform console` command opens an interactive REPL that evaluates express
 ```
 $ terraform console
 > [for e in ["dev","staging","prod"] : upper(e)]
-tolist([
+[
   "DEV",
   "STAGING",
   "PROD",
-])
+]
 > merge({"a"=1}, {"b"=2, "a"=99})
 {
   "a" = 99
   "b" = 2
 }
-> ^D
+> exit
 ```
 
 This is invaluable for debugging complex expressions before committing them to `.tf` files. It does not modify state.
@@ -386,7 +386,7 @@ local.env_map
 local.firewall_allow_rules
 ```
 
-Type `Ctrl+D` to exit.
+Type `exit` to quit the console.
 
 ### Exercise 2 — Conditional Apply (enable_production=false)
 
@@ -395,6 +395,8 @@ terraform apply -auto-approve -var='enable_production=false'
 ```
 
 Expected: Terraform creates instances for `dev` and `staging` only. The `prod` instance and `google_storage_bucket.prod_data` are excluded.
+
+This apply also creates the `google_compute_subnetwork.multi[*]` resources from `var.vpc_config`. Those subnets are a separate variable (used in exercises 10–11 to demonstrate nested structure flattening) and are not gated by `enable_production`. Note that `var.vpc_config` has `dev` and `prod` entries but no `staging` entry — the lack of a staging entry there is intentional and is covered in exercise 11.
 
 Check the output:
 
@@ -405,10 +407,10 @@ terraform output enabled_environments
 Expected:
 
 ```
-tolist([
+[
   "dev",
   "staging",
-])
+]
 ```
 
 Check the prod bucket output:
@@ -450,11 +452,11 @@ terraform output prod_bucket
 Expected:
 
 ```
-tolist([
+[
   "dev",
   "staging",
   "prod",
-])
+]
 "tf-lab08-prod-data-xxxxxxxx"
 ```
 
@@ -488,7 +490,7 @@ Evaluate these expressions. Predict the output before pressing Enter each time.
 ```
 [for e in ["dev", "staging", "prod"] : upper(e)]
 ```
-Expected: `tolist(["DEV", "STAGING", "PROD"])`
+Expected: `["DEV", "STAGING", "PROD"]`
 
 **Map inversion:**
 ```
@@ -500,7 +502,7 @@ Expected: `{ 1 = "a", 2 = "b" }`
 ```
 [for s in ["dev", "prod"] : s if s != "prod"]
 ```
-Expected: `tolist(["dev"])`
+Expected: `["dev"]`
 
 **join:**
 ```
@@ -512,7 +514,7 @@ Expected: `"a, b, c"`
 ```
 flatten([[1, 2], [3, 4]])
 ```
-Expected: `tolist([1, 2, 3, 4])`
+Expected: `[1, 2, 3, 4]`
 
 **merge (later map wins on conflict):**
 ```
@@ -526,7 +528,7 @@ toset(["dev", "dev", "staging", "prod", "staging"])
 ```
 Expected: `toset(["dev", "prod", "staging"])`
 
-Exit with `Ctrl+D`.
+Exit the console: type `exit`.
 
 ### Exercise 6 — for_each Resources and Outputs
 
@@ -572,13 +574,27 @@ google_compute_instance.app[*].id
 
 But with `for_each`, the `[*]` splat does not work as expected — use a `for` expression instead. This is an important distinction to internalise.
 
+Exit the console:
+
+```
+exit
+```
+
 ### Exercise 8 — Inspect the Debug null_resource
 
-During the apply in Exercise 3, look back at the Terraform output. You should see a line from the `null_resource.debug` local-exec provisioner:
+Force-recreate the `null_resource.debug` to see its local-exec provisioner fire:
+
+```bash
+terraform apply -auto-approve -replace=null_resource.debug
+```
+
+In the output, look for a line from the local-exec provisioner:
 
 ```
 null_resource.debug (local-exec): env_map: {"dev":{...},"prod":{...},"staging":{...}}
 ```
+
+The `-replace` flag forces Terraform to destroy and recreate a specific resource, even when there are no configuration changes. It is the modern replacement for the deprecated `terraform taint` command.
 
 This pattern — `local-exec` + `jsonencode()` — is useful for debugging complex locals during development. It prints the value of a local as JSON to stdout during `apply`. Remove it before committing production code.
 
@@ -636,7 +652,7 @@ length(toset(["a","b","c"])) # set — unordered
 tomap({ dev = "t1", prod = "t2" })   # map (all values same type)
 ```
 
-Exit the console: `Ctrl+D`
+Exit the console: type `exit`.
 
 ### Exercise 10 — Trace the nested flattening in console
 
@@ -670,13 +686,13 @@ keys(local.all_subnets)
 
 Expected from step 6 with defaults:
 ```
-tolist([
+[
   "dev-subnet-0",
   "dev-subnet-1",
   "prod-subnet-0",
   "prod-subnet-1",
   "prod-subnet-2",
-])
+]
 ```
 
 These keys are exactly the suffixes you'll see in `terraform state list`:
@@ -688,7 +704,7 @@ These keys are exactly the suffixes you'll see in `terraform state list`:
 terraform apply -auto-approve
 ```
 
-The apply now includes `google_compute_subnetwork.multi[*]` resources. After apply:
+The `google_compute_subnetwork.multi[*]` resources were already created in exercise 2 (they are not gated by `enable_production`). This apply adds `google_compute_instance.app["prod"]` and `google_storage_bucket.prod_data[0]` if you haven't re-applied with full production enabled since exercise 2. After apply:
 
 ```bash
 # List the flattened subnet resources in state — note the stable composite keys
