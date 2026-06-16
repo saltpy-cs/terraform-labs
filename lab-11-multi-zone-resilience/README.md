@@ -20,8 +20,7 @@ Every resilience design starts with two questions:
 **RTO — Recovery Time Objective**: how long can your service be unavailable before
 the outage becomes unacceptable? Thirty seconds? Two minutes? Four hours?
 
-**RPO — Recovery Point Objective**: how much data can you afford to lose? If you
-restore from last night's backup, you lose everything since then — that's your RPO.
+**RPO — Recovery Point Objective**: how much data can you afford to lose, expressed as a time window? An RPO of 10 minutes means recovery must restore state from no more than 10 minutes before the failure — anything written in that window is gone. If you restore from last night's backup, your RPO is however many hours have passed since then.
 
 These are business decisions, not technical ones. But the decisions directly
 determine which infrastructure patterns you need:
