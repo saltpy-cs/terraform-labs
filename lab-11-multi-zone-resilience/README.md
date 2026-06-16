@@ -173,9 +173,10 @@ gcloud services enable compute.googleapis.com storage.googleapis.com
 gcloud auth application-default login
 gcloud config set project <your-project-id>
 
-# Create a state bucket (or reuse from a previous lab)
+# Create a state bucket (or reuse from a previous lab) and enable versioning
 STATE_BUCKET="tf-lab11-state-$(gcloud config get-value project)"
 gcloud storage buckets create gs://$STATE_BUCKET --location=us-central1
+gcloud storage buckets update gs://$STATE_BUCKET --versioning
 ```
 
 Copy the example vars file and fill in your values:
