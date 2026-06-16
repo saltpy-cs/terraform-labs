@@ -385,8 +385,9 @@ Terraform Cloud has been successfully initialized!
 ### Exercise 9 — Configure Workspace Variables
 
 In the HCP Terraform UI:
-1. Navigate to your workspace → **Variables**
-2. Add an **Environment variable**:
+1. Select your workspace, then click the **Variables** tab in the top navigation bar (alongside Overview, Runs, States, Settings).
+2. On the Variables page there are two sections — **Terraform Variables** and **Environment Variables**. Scroll down to **Environment Variables** and click **+ Add variable**.
+3. Add an **Environment variable**:
    - `GOOGLE_CREDENTIALS` = the full JSON content of a GCP service account key file (mark as **Sensitive**)
 
    To generate a service account key:
