@@ -207,8 +207,18 @@ Note the `distribution_policy_zones` — three zones are explicitly configured.
 
 Find the `auto_healing_policies` block. What is `initial_delay_sec` set to and why?
 
+> `initial_delay_sec = 300`. The startup script installs nginx via `apt-get`, which
+> can take 2–4 minutes. Without this delay, the MIG would start health-checking
+> immediately, see a failing instance, and replace it before nginx is ready — causing
+> a replacement loop. 300 seconds gives the script time to finish before the first
+> health check fires.
+
 Find the `update_policy` block. What does `max_unavailable_fixed = 0` guarantee
 during a rolling update?
+
+> During a rolling update, the MIG will never reduce below `target_size`. It creates
+> a new instance and waits for it to pass health checks before removing the old one.
+> The LB always has at least the full complement of healthy instances serving traffic.
 
 ### Exercise 2 — Apply
 
