@@ -444,9 +444,9 @@ Sentinel is HCP Terraform's policy-as-code layer. It runs after a plan and befor
 
 **To set it up in the UI:**
 
-1. Open your workspace → **Settings** → **Policy Sets** → **Connect a new policy set**.
-2. Choose **Individually managed**, name it (e.g. `require-labels`), set Scope to **Specific workspaces** and add your workspace, then click **Create policy set**.
-3. On the policy set page click **Create a new policy**. Choose **Sentinel** as the language, name it (e.g. `buckets-must-have-labels`), leave enforcement as **Advisory**, and paste the following policy into the policy code field:
+**Step 1 — Create the policy.**
+
+In your workspace, go to **Settings** → **Policies** → **Create a new policy**. Choose **Sentinel** as the language, name it (e.g. `buckets-must-have-labels`), leave enforcement as **Advisory**, and paste the following into the policy code field:
 
 ```python
 import "tfplan/v2" as tfplan
@@ -466,9 +466,15 @@ all_buckets_labelled = rule {
 main = rule { all_buckets_labelled }
 ```
 
-This policy requires every GCS bucket in a plan to have at least one label. Because the `gcs-bucket` module always merges in `environment` and `managed_by` labels, this policy will pass for any resource this lab creates.
+This policy requires every GCS bucket in a plan to have at least one label. Because the `gcs-bucket` module always merges in `environment` and `managed_by` labels, this policy will pass for any resource this lab creates. Save the policy.
 
-4. Save the policy, then run `terraform plan` — the Sentinel check appears in the run output after the plan.
+**Step 2 — Create a policy set and attach the policy.**
+
+Go to **Settings** → **Policy Sets** → **Connect a new policy set**. Choose **Individually managed**, name it (e.g. `require-labels`), set Scope to **Specific workspaces** and add your workspace. In the **Policies** section, select the policy you just created. Click **Create policy set**.
+
+**Step 3 — Verify.**
+
+Run `terraform plan` — the Sentinel check appears in the run output after the plan.
 
 ### Exercise 12 — Destroy
 
