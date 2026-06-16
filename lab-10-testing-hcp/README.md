@@ -326,13 +326,30 @@ Re-run the unit tests to confirm the new assertion passes.
 terraform login
 ```
 
-Follow the prompts: a browser opens, you create an API token, paste it back into the terminal.
+A browser opens and takes you to HCP Terraform to generate an API token. Copy the token, return to the terminal, paste it, and press Enter.
+
+**The terminal will not show any characters as you paste** — the token input is hidden like a password field. This is expected. Paste the token and press Enter even though nothing appears on screen.
 
 Expected:
 ```
 Retrieved token for user yourname
 
 Welcome to HCP Terraform!
+```
+
+If the browser flow does not work, you can create the credentials file manually. In HCP Terraform go to **User Settings → Tokens**, create a token, then run:
+
+```bash
+mkdir -p ~/.terraform.d
+cat > ~/.terraform.d/credentials.tfrc.json <<EOF
+{
+  "credentials": {
+    "app.terraform.io": {
+      "token": "YOUR_TOKEN_HERE"
+    }
+  }
+}
+EOF
 ```
 
 ### Exercise 8 — Configure the Cloud Block
