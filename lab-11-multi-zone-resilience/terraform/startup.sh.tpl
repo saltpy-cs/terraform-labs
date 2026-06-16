@@ -18,11 +18,9 @@ cat > /var/www/html/index.html <<HTML
 <head><title>${project_name}</title></head>
 <body>
   <h1>${project_name}</h1>
-  <table>
-    <tr><td><strong>Hostname</strong></td><td>$HOSTNAME</td></tr>
-    <tr><td><strong>Zone</strong></td><td>$ZONE</td></tr>
-    <tr><td><strong>Instance ID</strong></td><td>$INSTANCE_ID</td></tr>
-  </table>
+  <p>Hostname: $HOSTNAME</p>
+  <p>Zone: $ZONE</p>
+  <p>Instance ID: $INSTANCE_ID</p>
   <p><em>Reload to see load balancer round-robin across zones.</em></p>
 </body>
 </html>

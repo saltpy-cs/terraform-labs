@@ -286,7 +286,7 @@ echo "Load balancer IP: $LB_IP"
 
 # Hit the LB 9 times — you should see all three zones appear
 for i in $(seq 1 9); do
-  curl -s http://$LB_IP | grep -oE 'Zone[^<]*<'
+  curl -s http://$LB_IP | grep 'Zone' | grep -oE '[a-z]+-[a-z0-9]+-[a-z]'
 done
 ```
 
@@ -332,7 +332,7 @@ The service is degraded (one fewer instance) but not down:
 
 ```bash
 # Keep hitting the LB — it should keep responding during the recovery
-while true; do curl -s http://$LB_IP | grep -oE 'Zone[^<]*<'; sleep 1; done
+while true; do curl -s http://$LB_IP | grep 'Zone' | grep -oE '[a-z]+-[a-z0-9]+-[a-z]'; sleep 1; done
 ```
 
 This is the difference between **availability** (service is up) and **capacity**
