@@ -39,13 +39,16 @@ gs://your-bucket/lab09/
     └── default.tfstate    ← prod workspace state
 ```
 
-You configure the backend once with a `prefix`; Terraform handles the path routing automatically:
+You configure the backend once with a `prefix`; the bucket is passed at `terraform init` time via `-backend-config` so it never has to be hardcoded:
 
 ```hcl
 backend "gcs" {
-  bucket = "my-state-bucket"
   prefix = "lab09"
 }
+```
+
+```bash
+terraform init -backend-config="bucket=tf-lab09-state-$(gcloud config get-value project)"
 ```
 
 Exercise 5 verifies this layout once workspaces are applied:
@@ -155,11 +158,7 @@ cd lab-09-workspaces/terraform
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `terraform.tfvars` and set `gcp_project` and `state_bucket` to your values.
-
-### Configure the Backend
-
-Edit the `backend "gcs"` block in `main.tf`. Replace `YOUR_STATE_BUCKET_NAME` with your actual bucket name.
+Edit `terraform.tfvars` and set `gcp_project` to your project ID. No other values need changing.
 
 ---
 
@@ -181,17 +180,11 @@ Enabling versioning for gs://tf-lab09-state-your-project-id/...
 
 ### Exercise 2 — Configure the Backend and Initialise
 
-Edit `terraform/main.tf`. In the `backend "gcs"` block, replace `YOUR_STATE_BUCKET_NAME` with your actual bucket name (e.g. `tf-lab09-state-your-project-id`).
+The backend uses a partial configuration — the bucket name is passed at init time so it never has to be hardcoded in `main.tf`:
 
-Also update `terraform.tfvars`:
-```hcl
-gcp_project  = "your-gcp-project-id"
-state_bucket = "tf-lab09-state-your-project-id"
-```
-
-Initialise:
 ```bash
-terraform init
+STATE_BUCKET="tf-lab09-state-$(gcloud config get-value project)"
+terraform init -backend-config="bucket=${STATE_BUCKET}"
 ```
 
 Expected:

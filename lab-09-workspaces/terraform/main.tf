@@ -9,21 +9,14 @@ terraform {
   }
 
   # GCS backend for remote state with workspace support.
-  #
-  # IMPORTANT: Before running `terraform init`, replace YOUR_STATE_BUCKET_NAME
-  # with your actual GCS bucket name. You can reuse a bucket from Lab 03, or
-  # create a new one:
-  #   gsutil mb -l us-central1 gs://YOUR_BUCKET_NAME
+  # Bucket is passed at init time via -backend-config to avoid hardcoding it here.
   #
   # Workspace state paths in GCS (note: different from S3's env:/ prefix):
-  #   default workspace:  gs://<bucket>/lab09/default.tfstate
+  #   default workspace:  gs://<bucket>/lab09/default/default.tfstate
   #   other workspaces:   gs://<bucket>/lab09/<workspace>/default.tfstate
   #
-  # The GCS backend uses the prefix as a directory and stores each workspace
-  # state under <prefix>/<workspace>/default.tfstate. Terraform manages this
-  # routing automatically — you only configure the prefix once.
+  # Terraform manages this routing automatically — you only configure the prefix once.
   backend "gcs" {
-    bucket = "YOUR_STATE_BUCKET_NAME"
     prefix = "lab09"
   }
 }

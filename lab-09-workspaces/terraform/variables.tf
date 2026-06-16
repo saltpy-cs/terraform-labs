@@ -21,7 +21,3 @@ variable "project_name" {
   default     = "tf-lab09"
 }
 
-variable "state_bucket" {
-  description = "GCS bucket name for Terraform state. Create this bucket before running terraform init."
-  type        = string
-}
