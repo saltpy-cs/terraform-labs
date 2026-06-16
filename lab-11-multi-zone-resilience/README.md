@@ -395,14 +395,25 @@ gcloud storage buckets describe gs://$STATE_BUCKET --format="value(versioning_en
 
 Expected output: `True`
 
-List all state versions written so far:
+Trigger a second state write so there is something to version — a plan with no
+infrastructure changes still updates state metadata:
+
+```bash
+terraform apply -auto-approve
+```
+
+Now list all state versions:
 
 ```bash
 gcloud storage ls --all-versions gs://$STATE_BUCKET/lab11/
 ```
 
-You'll see entries like `default.tfstate#1234567890` — each `#` suffix is a generation
-number (version). GCS keeps all of them.
+Each entry is one state write. The `#` suffix is the GCS generation number — a
+monotonically increasing integer assigned to every object write. Versioning keeps
+all of them rather than overwriting the previous one.
+
+> If you only see one entry, versioning was enabled after your first apply. Run
+> `terraform apply -auto-approve` again and re-run the `ls` — you should see two.
 
 Simulate accidental state corruption — remove a resource from state without destroying it:
 
