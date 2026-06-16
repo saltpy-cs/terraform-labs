@@ -246,7 +246,8 @@ The table has two status columns — `currentAction` (what the MIG is doing) and
 
 | currentAction | instanceStatus | meaning |
 |---|---|---|
-| `CREATING` | `STAGING` | VM is being allocated and booted |
+| `CREATING` | `STAGING` | VM is being allocated and booted (initial deployment) |
+| `RECREATING` | `STAGING` | VM is being replaced by auto-healing |
 | `VERIFYING` | `RUNNING` | VM is up; MIG is waiting for health checks to pass |
 | `NONE` | `RUNNING` | Instance healthy and serving traffic |
 
@@ -328,7 +329,7 @@ watch -n5 'gcloud compute instance-groups managed list-instances tf-lab11-mig \
 Observe:
 1. The deleted instance disappears
 2. Within ~30 seconds the MIG detects the missing instance and starts creating a replacement
-3. The replacement appears with `currentAction: CREATING`, then `VERIFYING`, then `RUNNING`
+3. The replacement appears with `currentAction: RECREATING`, then `VERIFYING`, then `NONE` (instanceStatus: `RUNNING`)
 
 While this is happening, the LB continues routing to the two surviving instances.
 The service is degraded (one fewer instance) but not down:
