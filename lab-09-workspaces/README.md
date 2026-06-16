@@ -266,23 +266,13 @@ A new GCE instance was created. The default workspace's dev instance still exist
 
 ```bash
 STATE_BUCKET="tf-lab09-state-$(gcloud config get-value project)"
-gcloud storage ls gs://${STATE_BUCKET}/lab09/
+gcloud storage ls -r gs://${STATE_BUCKET}/lab09/
 ```
 
-Expected output (note the workspace-named subdirectories):
-```
-gs://tf-lab09-state-your-project-id/lab09/default/
-gs://tf-lab09-state-your-project-id/lab09/staging/
-```
-
-Drill into the default workspace directory:
-```bash
-gcloud storage ls gs://${STATE_BUCKET}/lab09/default/
-```
-
-Expected:
+Expected output:
 ```
 gs://tf-lab09-state-your-project-id/lab09/default/default.tfstate
+gs://tf-lab09-state-your-project-id/lab09/staging/default.tfstate
 ```
 
 This is the GCS path pattern: `<prefix>/<workspace>/default.tfstate`. Compare this to the S3 backend which uses `env:/<workspace>/<key>`.
