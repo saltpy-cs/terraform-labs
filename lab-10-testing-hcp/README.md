@@ -408,7 +408,7 @@ gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
 gcloud iam service-accounts keys create key.json \
   --iam-account tf-lab10-runner@YOUR_PROJECT_ID.iam.gserviceaccount.com
 
-jq -c . key.json  # copy this single-line output as the variable value
+cat key.json | jq -c '.'  # copy this single-line output as the variable value
 ```
 
 HCP Terraform does not accept multi-line variable values. `jq -c .` minifies the JSON to a single line with no newlines, which the UI accepts.
