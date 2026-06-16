@@ -241,7 +241,14 @@ watch -n5 'gcloud compute instance-groups managed list-instances tf-lab11-mig \
   --region=us-central1 --format="table(instance,currentAction,instanceStatus,zone)"'
 ```
 
-You'll see instances move through: `CREATING` → `VERIFYING` → `RUNNING`.
+The table has two status columns — `currentAction` (what the MIG is doing) and
+`instanceStatus` (the VM's own state). A typical progression:
+
+| currentAction | instanceStatus | meaning |
+|---|---|---|
+| `CREATING` | `STAGING` | VM is being allocated and booted |
+| `VERIFYING` | `RUNNING` | VM is up; MIG is waiting for health checks to pass |
+| `NONE` | `RUNNING` | Instance healthy and serving traffic |
 
 ### Exercise 3 — Verify zone distribution
 
