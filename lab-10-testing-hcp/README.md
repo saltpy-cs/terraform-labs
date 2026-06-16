@@ -509,7 +509,6 @@ Destroy complete! Resources: X destroyed.
 
 ## Cleanup
 
-**Part B — destroy remote resources:**
 ```bash
 terraform destroy -auto-approve
 ```
