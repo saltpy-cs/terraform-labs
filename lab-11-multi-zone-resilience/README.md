@@ -489,7 +489,7 @@ This destroys all resources including the load balancer forwarding rule (the mai
 driver). Verify cleanup:
 
 ```bash
-gcloud compute forwarding-rules list --region=us-central1 | grep tf-lab11
+gcloud compute forwarding-rules list --regions=us-central1 | grep tf-lab11
 gcloud compute instance-groups managed list --region=us-central1 | grep tf-lab11
 ```
 
