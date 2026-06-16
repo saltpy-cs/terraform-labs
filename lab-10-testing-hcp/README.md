@@ -515,13 +515,14 @@ terraform destroy -auto-approve
 
 In the HCP Terraform UI, delete the workspace:
 
-1. Open your workspace → **Settings** → **Destruction and Deletion**.
-2. Click **Delete workspace** and confirm. This removes the workspace and its stored state from HCP Terraform.
+1. From the organisation overview, click on your workspace (`terraform-labs-lab10`) to open it.
+2. Inside the workspace, click **Settings** in the left sidebar (this is the workspace-level Settings, not the organisation-level Settings).
+3. Scroll to the bottom of the General settings page and look for a **Delete workspace** button. Confirm the deletion.
 
 Optionally delete the organisation if you no longer need it:
 
-1. From the organisation overview, click **Settings** in the left sidebar.
-2. Scroll to **Delete organisation** and confirm.
+1. From the organisation overview, click the organisation-level **Settings** in the left sidebar → **General**.
+2. Scroll to the bottom and look for **Delete organisation**.
 
 **Verify everything is gone** (Part A tests clean up automatically; this confirms both parts are clear):
 ```bash
