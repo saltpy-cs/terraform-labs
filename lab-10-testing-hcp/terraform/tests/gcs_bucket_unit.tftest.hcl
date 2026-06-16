@@ -30,6 +30,11 @@ run "versioning_enabled" {
     condition     = output.bucket_name != ""
     error_message = "bucket_name should not be empty"
   }
+
+  assert {
+    condition     = startswith(output.bucket_url, "gs://")
+    error_message = "bucket_url should start with 'gs://'"
+  }
 }
 
 # ── Test 2: Versioning disabled ───────────────────────────────────────────────

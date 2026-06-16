@@ -13,13 +13,13 @@ terraform {
   # Replace "your-org-name" with your HCP Terraform organisation name.
   # After uncommenting, run: terraform login && terraform init
   #
-  # cloud {
-  #   organization = "your-org-name"
-  #
-  #   workspaces {
-  #     name = "terraform-labs-lab10"
-  #   }
-  # }
+  cloud {
+    organization = "saltpy-terraform-labs"
+  
+    workspaces {
+      name = "terraform-labs-lab10"
+    }
+  }
 }
 
 provider "google" {
