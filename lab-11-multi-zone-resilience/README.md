@@ -538,10 +538,8 @@ This destroys all resources including the load balancer forwarding rule (the mai
 driver). Verify cleanup:
 
 ```bash
-gcloud compute forwarding-rules list --filter="name~tf-lab11"
-gcloud compute instance-groups managed list --filter="name~tf-lab11"
+gcloud compute forwarding-rules list | grep tf-lab11 || echo "OK: no forwarding rules"
+gcloud compute instance-groups managed list | grep tf-lab11 || echo "OK: no instance groups"
 ```
-
-Both commands should return no output.
 
 Both commands should return no output.
