@@ -25,16 +25,13 @@ The key insight: **the code is shared, the state is isolated.** You deploy the s
 
 ### GCS Backend Workspace State Paths
 
-The GCS backend stores workspace state under `<prefix>/<workspace>/default.tfstate`. This differs from the S3 backend, which uses `env:/<workspace>/<key>`.
+The GCS backend stores workspace state as `<prefix>/<workspace>.tfstate` — a flat structure within the prefix. This differs from the S3 backend, which uses `env:/<workspace>/<key>`.
 
 ```
 gs://your-bucket/lab09/
-├── default/
-│   └── default.tfstate    ← default workspace (treated as dev)
-├── staging/
-│   └── default.tfstate    ← staging workspace state
-└── prod/
-    └── default.tfstate    ← prod workspace state
+├── default.tfstate    ← default workspace (treated as dev)
+├── staging.tfstate    ← staging workspace state
+└── prod.tfstate       ← prod workspace state
 ```
 
 You configure the backend once with a `prefix`; the bucket is passed at `terraform init` time via `-backend-config` so it never has to be hardcoded:
@@ -266,16 +263,16 @@ A new GCE instance was created. The default workspace's dev instance still exist
 
 ```bash
 STATE_BUCKET="tf-lab09-state-$(gcloud config get-value project)"
-gcloud storage ls -r gs://${STATE_BUCKET}/lab09/
+gcloud storage ls gs://${STATE_BUCKET}/lab09/
 ```
 
 Expected output:
 ```
-gs://tf-lab09-state-your-project-id/lab09/default/default.tfstate
-gs://tf-lab09-state-your-project-id/lab09/staging/default.tfstate
+gs://tf-lab09-state-your-project-id/lab09/default.tfstate
+gs://tf-lab09-state-your-project-id/lab09/staging.tfstate
 ```
 
-This is the GCS path pattern: `<prefix>/<workspace>/default.tfstate`. Compare this to the S3 backend which uses `env:/<workspace>/<key>`.
+This is the GCS path pattern: `<prefix>/<workspace>.tfstate` — a flat structure within the prefix. Compare this to the S3 backend which uses `env:/<workspace>/<key>`.
 
 ### Exercise 8 — State Isolation Demo
 
