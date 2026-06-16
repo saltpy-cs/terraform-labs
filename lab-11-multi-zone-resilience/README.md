@@ -356,9 +356,20 @@ watch -n5 'gcloud compute instance-groups managed list-instances tf-lab11-mig \
   --region=us-central1 --format="table(instance,currentAction,instanceStatus)"'
 ```
 
-Note the time. With `initial_delay_sec = 300` and a health check `check_interval_sec`
-of 10, expect 5–8 minutes from deletion to healthy. This is your **RTO** for a single
-instance failure with this configuration.
+What to expect — the replacement moves through three phases:
+
+| Phase | currentAction | Duration | Why |
+|---|---|---|---|
+| VM allocation & boot | `RECREATING` | ~30–60s | GCP provisions and starts the VM |
+| Initial delay | `VERIFYING` | ~5 min | MIG waits out `initial_delay_sec = 300` before health checks begin |
+| Health check pass | `VERIFYING` | ~20s | 2 consecutive passing checks at `check_interval_sec = 10` |
+| Healthy | `NONE` | — | Instance back in service |
+
+**Total: ~6–7 minutes.** The bulk is `initial_delay_sec` — lower it to reduce RTO,
+but if you set it below your startup script's worst-case runtime, health checks fire
+before nginx is ready and the MIG replaces the instance again in a loop.
+
+This is your **RTO** for a single instance failure with this configuration.
 
 To reduce RTO:
 - Lower `initial_delay_sec` (risky: health checks start before nginx is ready → premature
