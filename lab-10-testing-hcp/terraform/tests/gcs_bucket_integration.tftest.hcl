@@ -3,6 +3,11 @@
 # Requires valid GCP credentials in the environment (GOOGLE_CREDENTIALS or ADC).
 # Slower and has a small cost (GCS bucket creation is essentially free).
 
+variable "gcp_project" {
+  description = "GCP project ID for integration tests. Picked up from terraform.tfvars."
+  type        = string
+}
+
 # ── Test 1: Create bucket with versioning and verify outputs ──────────────────
 
 run "create_bucket_with_versioning" {
