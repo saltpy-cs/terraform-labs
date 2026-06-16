@@ -443,9 +443,10 @@ Open that URL in your browser to see the full plan output, including any Sentine
 1. In the HCP Terraform UI, open your workspace and click **Settings** in the left sidebar.
 2. Under Settings, click **Policy Sets**, then **Connect a new policy set**.
 3. Choose **Individually managed** (policies are entered directly in the UI rather than sourced from a VCS repository).
-4. Give the policy set a name (e.g. `require-labels`) and click **Create policy set**.
-5. On the policy set page, click **Create a new policy**. Choose **Sentinel** as the language. Give it a name (e.g. `buckets-must-have-labels`) and paste the policy below.
-6. Under **Policy sets scope**, attach it to your workspace.
+4. Give the policy set a name (e.g. `require-labels`).
+5. Under **Scope**, select **Specific workspaces** and add your workspace.
+6. Click **Create policy set**.
+7. On the policy set page, click **Create a new policy**. Choose **Sentinel** as the language. Give it a name (e.g. `buckets-must-have-labels`) and paste the policy below.
 
 Create a Sentinel policy that requires all GCS buckets to have at least one label:
 
