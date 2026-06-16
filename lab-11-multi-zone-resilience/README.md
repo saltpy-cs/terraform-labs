@@ -290,8 +290,12 @@ for i in $(seq 1 9); do
 done
 ```
 
-Each response shows the zone of the instance that served it. With 3 instances across
-3 zones and 9 requests, you should see each zone appear 3 times (approximately).
+Each response shows the zone of the instance that served it. You should see at least
+two different zones across the 9 requests, confirming the LB is reaching multiple zones.
+
+Don't expect even distribution — this is a passthrough NLB using connection-based
+hashing, not round-robin. Requests from a single client IP tend to hash to the same
+backend, so one zone may dominate. That's normal and expected.
 
 You can also hit instances directly by their public IP to compare:
 
