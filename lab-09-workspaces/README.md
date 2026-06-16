@@ -282,7 +282,25 @@ terraform workspace select default
 terraform state list
 ```
 
-Expected: only default workspace resources (VPC, subnet, instance with dev naming).
+Expected:
+```
+data.google_compute_image.debian
+google_compute_firewall.allow_ssh
+google_compute_instance.app
+google_compute_network.main
+google_compute_subnetwork.main
+```
+
+The resource addresses are the same in every workspace — the workspace-specific naming is in the resource attributes, not the address. Confirm the instance name to see the `default → dev` mapping in action:
+
+```bash
+terraform state show google_compute_instance.app | grep "^    name"
+```
+
+Expected:
+```
+    name = "tf-lab09-dev-instance"
+```
 
 Switch to staging and list resources:
 ```bash
@@ -290,9 +308,18 @@ terraform workspace select staging
 terraform state list
 ```
 
-Expected: only staging resources — the default workspace's resources are not visible from here.
+Expected: the same resource addresses — but these point to entirely different GCP resources. The default workspace's resources are not visible from the staging state file.
 
-This demonstrates that `terraform state list` operates only on the current workspace's state file.
+```bash
+terraform state show google_compute_instance.app | grep "^    name"
+```
+
+Expected:
+```
+    name = "tf-lab09-staging-instance"
+```
+
+This demonstrates that `terraform state list` operates only on the current workspace's state file, and that the same resource address (`google_compute_instance.app`) resolves to a different real resource in each workspace.
 
 ### Exercise 9 — Machine Type Variation
 
