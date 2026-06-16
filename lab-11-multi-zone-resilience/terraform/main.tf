@@ -116,6 +116,10 @@ resource "google_compute_instance_template" "app" {
     # so the MIG can reference the new template during rolling updates.
     create_before_destroy = true
   }
+
+  labels = {
+    version = "v2"
+  }
 }
 
 # ── Health Check ─────────────────────────────────────────────────────────────
@@ -206,15 +210,16 @@ resource "google_compute_region_autoscaler" "app" {
 # original client IP directly. GCP does not terminate the TCP connection.
 
 resource "google_compute_region_backend_service" "app" {
-  name                  = "${var.project_name}-backend"
-  region                = var.gcp_region
-  protocol              = "TCP"
-  load_balancing_scheme = "EXTERNAL"
-  health_checks         = [google_compute_region_health_check.app.id]
+  name                            = "${var.project_name}-backend"
+  region                          = var.gcp_region
+  protocol                        = "TCP"
+  load_balancing_scheme           = "EXTERNAL"
+  health_checks                   = [google_compute_region_health_check.app.id]
+  connection_draining_timeout_sec = 0
 
   backend {
-    group           = google_compute_region_instance_group_manager.app.instance_group
-    balancing_mode  = "CONNECTION"
+    group          = google_compute_region_instance_group_manager.app.instance_group
+    balancing_mode = "CONNECTION"
   }
 }
 

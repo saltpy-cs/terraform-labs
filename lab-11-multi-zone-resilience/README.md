@@ -490,6 +490,11 @@ deletes the old ones. Expected timeline:
 The LB continues serving traffic from old instances throughout — `DELETING` only
 starts once all new instances are healthy and in service.
 
+> **Note**: GCP backend services default to a 300s connection draining timeout, which
+> would hold instances in `DELETING` for up to 5 minutes waiting for connections to
+> close. The config sets `connection_draining_timeout_sec = 0` to skip draining —
+> appropriate here since the lab serves short-lived HTTP requests, not persistent connections.
+
 ### Exercise 10 — Explore autoscaling
 
 The autoscaler targets 60% CPU. With e2-micro and low load, it will scale down to
