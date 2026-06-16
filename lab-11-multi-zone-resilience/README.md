@@ -379,10 +379,16 @@ To reduce RTO:
 
 ### Exercise 8 — Terraform state resilience
 
-Verify that your state bucket has versioning enabled:
+Enable versioning on the state bucket (not on by default at creation time):
 
 ```bash
 STATE_BUCKET="tf-lab11-state-$(gcloud config get-value project)"
+gcloud storage buckets update gs://$STATE_BUCKET --versioning
+```
+
+Verify it's now enabled:
+
+```bash
 gcloud storage buckets describe gs://$STATE_BUCKET --format="value(versioning)"
 ```
 
