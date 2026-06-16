@@ -285,6 +285,8 @@ terraform test -verbose -filter=tests/gcs_bucket_unit.tftest.hcl
 
 Observe: verbose mode shows the mock provider's generated values for computed attributes (e.g., the fake `name` and `self_link` values assigned to the bucket). This helps you understand what a mock provider returns and how to write assertions against those values.
 
+You will see a `Planning failed` message in the output — this is expected. It comes from the `invalid_environment_rejected` test, which uses `expect_failures = [var.environment]` to deliberately trigger the variable validation error. Terraform reports the plan failure inline, but the test framework sees that the failure was anticipated and marks the test as passed. A `Planning failed` line followed by a passing test result is the correct behaviour for any `expect_failures` test.
+
 ### Exercise 4 — Run Only Unit Tests
 
 ```bash
