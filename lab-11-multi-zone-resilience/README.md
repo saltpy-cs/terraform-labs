@@ -477,9 +477,18 @@ watch -n5 'gcloud compute instance-groups managed list-instances tf-lab11-mig \
   --region=us-central1 --format="table(instance,currentAction,instanceStatus,version)"'
 ```
 
-Instances are replaced one at a time. Because `max_unavailable_fixed = 0`, the MIG
-creates the new instance and waits for it to pass health checks before removing the
-old one. The LB continues serving traffic throughout.
+Because `max_unavailable_fixed = 0` and `max_surge_fixed = 3`, the MIG creates all
+3 new instances in parallel, waits for all of them to pass health checks, then
+deletes the old ones. Expected timeline:
+
+| Phase | currentAction | Duration | What's happening |
+|---|---|---|---|
+| New VMs provisioning | `CREATING` | ~30–60s | 3 new instances booting in parallel |
+| Waiting for health checks | `VERIFYING` | ~5 min | `initial_delay_sec = 300` runs out before checks begin |
+| Old VMs terminated | `DELETING` | ~10–30s | Old instances removed once new ones are healthy |
+
+The LB continues serving traffic from old instances throughout — `DELETING` only
+starts once all new instances are healthy and in service.
 
 ### Exercise 10 — Explore autoscaling
 
