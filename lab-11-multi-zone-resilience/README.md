@@ -309,11 +309,10 @@ gcloud compute instances list --filter="name~tf-lab11" \
 Pick one instance name from the MIG list and delete it manually:
 
 ```bash
-# Find an instance in zone -a
-INSTANCE=$(gcloud compute instance-groups managed list-instances tf-lab11-mig \
-  --region=us-central1 --format="value(instance)" | head -1)
-ZONE=$(gcloud compute instance-groups managed list-instances tf-lab11-mig \
-  --region=us-central1 --format="value(zone)" | head -1 | cut -d'/' -f9)
+INSTANCE=$(gcloud compute instances list --filter="name~tf-lab11" \
+  --format="value(name)" | head -1)
+ZONE=$(gcloud compute instances list --filter="name~tf-lab11" \
+  --format="value(zone)" | head -1)
 
 echo "Deleting: $INSTANCE in $ZONE"
 gcloud compute instances delete $INSTANCE --zone=$ZONE --quiet
