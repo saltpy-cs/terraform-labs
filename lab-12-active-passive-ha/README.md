@@ -183,7 +183,7 @@ gcloud services enable \
   sqladmin.googleapis.com \
   redis.googleapis.com \
   servicenetworking.googleapis.com \
-  --project=YOUR_PROJECT_ID
+  --project=$(gcloud config get-value project)
 ```
 
 API activation takes ~1 minute. You only need to do this once per project.
@@ -251,7 +251,6 @@ After apply completes, inspect the Cloud SQL instance:
 
 ```bash
 gcloud sql instances describe $(terraform output -raw cloud_sql_instance_name) \
-  --project=$(terraform output -raw cloud_sql_instance_name | sed 's/-pg//') \
   --format="table(name,gceZone,secondaryGceZone,settings.availabilityType)"
 ```
 
@@ -309,7 +308,7 @@ Terraform will create `null_resource.cloud_sql_switchover[0]` and run the `local
 After it completes, check the zones again:
 
 ```bash
-gcloud sql instances describe tf-lab12-pg --project=YOUR_PROJECT \
+gcloud sql instances describe tf-lab12-pg \
   --format="value(gceZone, secondaryGceZone)"
 ```
 
@@ -347,13 +346,13 @@ Check the primary zone before and after:
 ```bash
 # Before (note current primary zone):
 gcloud redis instances describe tf-lab12-redis --region=us-central1 \
-  --project=YOUR_PROJECT --format="value(currentLocationId)"
+  --format="value(currentLocationId)"
 
 terraform apply -auto-approve -var="redis_failover_timestamp=$(date +%s)"
 
 # After (primary zone should have changed):
 gcloud redis instances describe tf-lab12-redis --region=us-central1 \
-  --project=YOUR_PROJECT --format="value(currentLocationId)"
+  --format="value(currentLocationId)"
 ```
 
 ### Exercise 10 — Simulate an application connection
