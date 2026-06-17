@@ -106,25 +106,17 @@ Mark it complete only when the verification command produces the expected output
 
 ## Cleanup
 
-After you have finished and recorded your score, destroy all resources to avoid ongoing charges.
+After you have finished and recorded your score, run the cleanup script from the repo root:
 
 ```bash
-# Destroy question resources (null_resource and local providers only — free)
-# These have no cloud cost but clean up state files:
-for q in q01 q02 q04 q05 q06 q07 q08 q10 q11 q12 q13 q14; do
-  dir="$HOME/tf-practice/$q"
-  if [ -d "$dir" ]; then
-    echo "Destroying $q..."
-    terraform -chdir="$dir" destroy -auto-approve 2>/dev/null || true
-  fi
-done
-
-# Q09 and Q03 touch real GCS state — clean up manually if needed
-
-# Destroy the setup infrastructure (removes the GCS buckets and VPC)
-cd terraform-labs/practice-test/setup
-terraform destroy -auto-approve
+./terraform-labs/practice-test/cleanup.sh
 ```
 
+The script handles everything in order:
+
+1. **Destroys resources** in each question directory (handling edge cases such as the Q03 remote backend, Q09's imported bucket, and Q10's workspaces).
+2. **Removes all `q*/` directories** from `practice-test/`.
+3. **Prompts before destroying setup infrastructure** (GCS buckets and VPC) — the only resources that incur ongoing cost.
+
 > The GCS buckets and VPC network created by setup will incur minimal cost if left running.
-> Always run `terraform destroy` in the `setup/` directory when you are done.
+> Always confirm the setup destroy prompt (or run `terraform destroy` in `practice-test/setup/` manually) when you are done.
