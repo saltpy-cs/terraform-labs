@@ -10,10 +10,6 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.0"
     }
-    time = {
-      source  = "hashicorp/time"
-      version = "~> 0.12"
-    }
   }
 }
 
@@ -76,22 +72,11 @@ resource "google_service_networking_connection" "private_vpc" {
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.private_ip_alloc.name]
 
-  # During destroy, wait for Cloud SQL and Redis to fully release the PSA
-  # connection before Terraform attempts to delete it. GCP's internal state
-  # lags ~60–120s after the managed services are deleted; without this wait
-  # the delete fails with "Producer services are still using this connection".
-  depends_on = [time_sleep.wait_before_psa_delete]
-}
-
-# Inserts a 120s pause on destroy between the managed services and the PSA
-# connection deletion, working around GCP's internal state propagation lag.
-resource "time_sleep" "wait_before_psa_delete" {
-  destroy_duration = "120s"
-
-  depends_on = [
-    google_sql_database_instance.primary,
-    google_redis_instance.primary,
-  ]
+  # ABANDON: Terraform removes this from state without calling the GCP delete
+  # API. GCP cleans up the peering connection automatically when the VPC is
+  # deleted. This avoids the "Producer services are still using this connection"
+  # race condition where GCP's internal state lags after Cloud SQL/Redis deletion.
+  deletion_policy = "ABANDON"
 }
 
 # ─── Cloud SQL (PostgreSQL, REGIONAL HA) ──────────────────────────────────────
