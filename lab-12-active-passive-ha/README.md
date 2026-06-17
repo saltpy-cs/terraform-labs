@@ -324,12 +324,15 @@ The primary zone should now differ from where it was before.
 
 ### Exercise 8 — Test null_resource idempotency
 
-Apply again WITHOUT changing the timestamp:
+Apply again WITHOUT the timestamp variable:
 
 ```bash
 terraform apply -auto-approve
-# failover_timestamp is back to "" → null_resource count = 0 → resource is destroyed
 ```
+
+You will see `null_resource.cloud_sql_switchover` being **destroyed** — this is
+expected and intentional. `failover_timestamp` defaults back to `""`, which sets
+`count = 0` on the null_resource, so Terraform removes it. No switchover runs.
 
 Now set the same timestamp from before:
 
