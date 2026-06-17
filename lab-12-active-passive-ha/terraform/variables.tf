@@ -29,8 +29,9 @@ variable "project_name" {
 
 variable "db_tier" {
   description = <<-EOT
-    Cloud SQL machine tier. db-f1-micro is the cheapest shared-core tier.
-    REGIONAL (HA) costs roughly 2× the tier price — ~$0.02/hr for db-f1-micro.
+    Cloud SQL machine tier. db-f1-micro is the cheapest shared-core tier,
+    compatible with ENTERPRISE edition. REGIONAL (HA) costs roughly 2× the
+    tier price — ~$0.02/hr for db-f1-micro.
   EOT
   type    = string
   default = "db-f1-micro"

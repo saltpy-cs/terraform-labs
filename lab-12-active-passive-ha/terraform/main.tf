@@ -101,7 +101,8 @@ resource "google_sql_database_instance" "primary" {
   deletion_protection = false
 
   settings {
-    tier = var.db_tier
+    tier    = var.db_tier
+    edition = "ENTERPRISE"
 
     # REGIONAL = HA with automatic zonal failover.
     # Change to "ZONAL" to see how Terraform handles a downgrade (Exercise 6).
