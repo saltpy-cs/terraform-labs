@@ -161,7 +161,7 @@ resource "null_resource" "write_files" {
 resource "local_file" "q07_template" {
   depends_on = [null_resource.create_dirs]
 
-  filename = pathexpand("~/tf-practice/q07/startup.sh.tpl")
+  filename = "${path.module}/../q07/startup.sh.tpl"
   content  = <<-EOT
     #!/bin/bash
     ENV="$${env}"
