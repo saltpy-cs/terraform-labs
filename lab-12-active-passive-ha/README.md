@@ -404,8 +404,9 @@ From the bastion, connect to **Cloud SQL** using the private IP:
 
 ```bash
 # Get the private IP and password (run on your laptop first, copy the values):
-terraform output cloud_sql_private_ip
+terraform output -raw cloud_sql_private_ip
 terraform output -raw cloud_sql_db_password
+# Note: zsh may show a trailing % after -raw output — do not include it in the password
 
 # On the bastion:
 PGPASSWORD=<password> psql -h <private_ip> -U appuser -d appdb
