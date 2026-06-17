@@ -54,6 +54,16 @@ output "redis_current_location" {
   value       = google_redis_instance.primary.current_location_id
 }
 
+output "bastion_ip" {
+  description = "External IP of the bastion VM — SSH target"
+  value       = google_compute_instance.bastion.network_interface[0].access_config[0].nat_ip
+}
+
+output "bastion_ssh" {
+  description = "gcloud SSH command to connect to the bastion"
+  value       = "gcloud compute ssh ${google_compute_instance.bastion.name} --zone=${var.primary_zone} --project=${var.gcp_project}"
+}
+
 output "vpc_name" {
   description = "VPC network name"
   value       = google_compute_network.main.name

@@ -2,6 +2,7 @@
 # terraform.tfvars is gitignored — never commit real credentials.
 
 gcp_project = "your-project-id"
+my_ip_cidr  = "YOUR_IP/32"              # run: curl ifconfig.me
 
 # Region and zones — all three must be in the same region.
 # us-central1 has a/b/c/f zones; all support Cloud SQL and Memorystore.

@@ -3,6 +3,11 @@ variable "gcp_project" {
   type        = string
 }
 
+variable "my_ip_cidr" {
+  description = "Your public IP in CIDR notation (e.g. 1.2.3.4/32). Restricts SSH to the bastion. Find it with: curl ifconfig.me"
+  type        = string
+}
+
 variable "gcp_region" {
   description = "GCP region — must support Cloud SQL and Memorystore (us-central1 is safest)"
   type        = string

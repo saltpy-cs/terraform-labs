@@ -15,9 +15,10 @@
 > **Cost warning:** This is the most expensive lab in the course. Estimated costs while the lab is running:
 > - Cloud SQL `db-f1-micro` REGIONAL: ~$0.02/hr
 > - Memorystore Redis 1GB STANDARD_HA: ~$0.098/hr
+> - Bastion VM e2-micro: ~$0.008/hr
 > - VPC, PSA: free
 >
-> **Total: ~$0.12/hr ($0.25 for a 2-hour lab session).**
+> **Total: ~$0.13/hr (~$0.26 for a 2-hour lab session).**
 > Run `terraform destroy` as soon as you finish. Cloud SQL REGIONAL (HA) provisions a primary and a standby replica with synchronous replication — expect **15–25 minutes** to provision and ~5 minutes to destroy. Redis takes ~5 minutes. The apply in Exercise 3 will feel slow; that's normal.
 
 ---
@@ -199,7 +200,7 @@ gcloud auth application-default login
 ```bash
 cd lab-12-active-passive-ha/terraform
 cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars and set gcp_project to your project ID
+# Edit terraform.tfvars — set gcp_project and my_ip_cidr (run: curl ifconfig.me)
 ```
 
 ---
@@ -389,45 +390,49 @@ gcloud redis instances describe tf-lab12-redis --region=us-central1 \
 
 ### Exercise 10 — Simulate an application connection
 
-Both Cloud SQL and Memorystore Redis use private IPs only — they are not reachable
-from your laptop. In a real deployment, application instances in the same VPC subnet
-connect directly. This exercise walks through what that connection looks like.
+Both Cloud SQL and Memorystore Redis use private IPs only — unreachable from your
+laptop. The bastion VM lives in the same VPC subnet and can reach both services
+directly, simulating how an application tier connects in production.
 
-First, retrieve the connection details:
-
-```bash
-terraform output cloud_sql_connection_name   # e.g. tf-labs-saltpy:us-central1:tf-lab12-pg
-terraform output cloud_sql_user              # appuser
-terraform output cloud_sql_password          # generated password stored in state
-terraform output redis_host                  # private IP
-terraform output redis_port                  # 6379
-```
-
-To actually connect from your machine, you need the [Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/sql-proxy):
+SSH to the bastion (wait ~1 minute after apply for the startup script to install the tools):
 
 ```bash
-# Download (macOS):
-curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.2/cloud-sql-proxy.darwin.arm64
-chmod +x cloud-sql-proxy
-
-# Start the proxy (authenticates using your gcloud ADC credentials):
-./cloud-sql-proxy $(terraform output -raw cloud_sql_connection_name) &
-
-# Connect with psql:
-PGPASSWORD=$(terraform output -raw cloud_sql_password) \
-  psql -h 127.0.0.1 -U appuser -d appdb
-
-# Stop the proxy when done:
-kill %1
+$(terraform output -raw bastion_ssh)
 ```
 
-> Redis cannot be reached from outside the VPC without additional setup (e.g. a bastion
-> VM or IAP tunnel). The `redis_host` output shows the private IP an application in the
-> same subnet would use with `redis-cli -h <host> -p 6379`.
+From the bastion, connect to **Cloud SQL** using the private IP:
 
-The key point: **both endpoints survive a failover**. The Cloud SQL connection name and
-the Redis host/port do not change when zones switch — your application reconnects to
-the same address and finds the new primary there.
+```bash
+# Get the private IP and password (run on your laptop first, copy the values):
+terraform output cloud_sql_private_ip
+terraform output -raw cloud_sql_db_password
+
+# On the bastion:
+PGPASSWORD=<password> psql -h <private_ip> -U appuser -d appdb
+```
+
+Run a quick query to confirm connectivity:
+
+```sql
+SELECT version();
+\q
+```
+
+From the bastion, connect to **Redis**:
+
+```bash
+# Get the Redis host (run on your laptop first, copy the value):
+terraform output -raw redis_host
+
+# On the bastion:
+redis-cli -h <redis_host> -p 6379 ping
+```
+
+Expected output: `PONG`
+
+The key point: **both endpoints survive a failover**. The private IP for Cloud SQL and
+the Redis host do not change when zones switch — your application reconnects to the
+same address and finds the new primary there. Exit the bastion with `exit`.
 
 ### Exercise 11 — Cleanup
 
