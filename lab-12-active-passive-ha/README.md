@@ -287,15 +287,23 @@ Without applying, change `availability_type = "REGIONAL"` to `"ZONAL"` in `main.
 terraform plan
 ```
 
-You should see a **destructive change**: Cloud SQL cannot change `availability_type` in-place. Terraform will show `forces replacement`. This would destroy the instance and recreate it — all data would be lost.
+You should see an **in-place update** — the provider modifies `availability_type`
+without recreating the instance. This means no data loss, but it does carry
+operational risk:
+
+- While transitioning from `REGIONAL` to `ZONAL`, the standby is removed. If the
+  primary fails during this window, there is no automatic failover.
+- Going the other direction (`ZONAL` → `REGIONAL`) provisions a new standby, which
+  takes 5–10 minutes. During that window HA is not yet active.
 
 Revert the change before continuing:
 ```bash
-git diff terraform/main.tf   # verify what you changed
-# manually revert or: git checkout terraform/main.tf
+git checkout terraform/main.tf
 ```
 
-This illustrates a real production risk: changing HA settings is not always a safe in-place update. Use `prevent_destroy = true` in production to guard against accidental replacement.
+In production, treat `availability_type` changes as a maintenance operation:
+schedule them in a low-traffic window, alert on-call, and verify the standby
+is healthy before considering the change complete.
 
 ### Exercise 7 — Trigger a Cloud SQL planned switchover
 
