@@ -441,7 +441,16 @@ same address and finds the new primary there. Exit the bastion with `exit`.
 terraform destroy -auto-approve
 ```
 
-Cloud SQL can take ~3–5 minutes to destroy. Confirm you see all resources removed.
+Cloud SQL takes ~3–5 minutes to destroy.
+
+> **If destroy fails with** `Failed to delete connection; Producer services are still using this connection` on `google_service_networking_connection.private_vpc` — this is a known GCP race condition. GCP's internal state for the PSA connection can lag a minute or two behind the Cloud SQL and Redis deletions. Wait 1–2 minutes and run `terraform destroy -auto-approve` again. It will succeed on the second attempt.
+
+Confirm all resources are removed:
+
+```bash
+gcloud sql instances list | grep tf-lab12 || echo "OK: no Cloud SQL instances"
+gcloud redis instances list --region=us-central1 | grep tf-lab12 || echo "OK: no Redis instances"
+```
 
 ---
 
