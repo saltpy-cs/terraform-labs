@@ -373,10 +373,6 @@ This demonstrates why the pattern uses a unique timestamp: the triggers map must
 
 ### Exercise 9 — Trigger a Redis failover
 
-```bash
-terraform apply -auto-approve -var="redis_failover_timestamp=$(date +%s)"
-```
-
 Check the primary zone before and after:
 
 ```bash
