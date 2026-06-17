@@ -18,7 +18,7 @@
 > - VPC, PSA: free
 >
 > **Total: ~$0.12/hr ($0.25 for a 2-hour lab session).**
-> Run `terraform destroy` as soon as you finish. Cloud SQL can take 5–10 minutes to provision and ~3 minutes to destroy.
+> Run `terraform destroy` as soon as you finish. Cloud SQL REGIONAL (HA) provisions a primary and a standby replica with synchronous replication — expect **15–25 minutes** to provision and ~5 minutes to destroy. Redis takes ~5 minutes. The apply in Exercise 3 will feel slow; that's normal.
 
 ---
 
