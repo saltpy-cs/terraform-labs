@@ -333,7 +333,15 @@ You will see `null_resource.cloud_sql_switchover` being **destroyed** — this i
 expected and intentional. `failover_timestamp` defaults back to `""`, which sets
 `count = 0` on the null_resource, so Terraform removes it. No switchover runs.
 
-Note the current primary zone, then apply with a fixed timestamp:
+After a switchover Cloud SQL takes 5–10 minutes to re-establish the standby in
+the old primary's zone. A second switchover will fail if the standby isn't ready.
+Wait until `secondaryGceZone` is populated before continuing:
+
+```bash
+watch -n10 'gcloud sql instances describe tf-lab12-pg --format="value(gceZone,secondaryGceZone)"'
+```
+
+Once both zones are shown, note the primary zone and apply with a fixed timestamp:
 
 ```bash
 gcloud sql instances describe tf-lab12-pg --format="value(gceZone)"
