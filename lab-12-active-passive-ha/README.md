@@ -334,14 +334,32 @@ You will see `null_resource.cloud_sql_switchover` being **destroyed** — this i
 expected and intentional. `failover_timestamp` defaults back to `""`, which sets
 `count = 0` on the null_resource, so Terraform removes it. No switchover runs.
 
-Now set the same timestamp from before:
+Note the current primary zone, then apply with a fixed timestamp:
 
 ```bash
-terraform apply -auto-approve -var="failover_timestamp=1000000000"   # a fixed, old value
-# null_resource is created with timestamp=1000000000
+gcloud sql instances describe tf-lab12-pg --format="value(gceZone)"
 
-terraform apply -auto-approve -var="failover_timestamp=1000000000"   # same value again
-# Terraform: null_resource already exists with these triggers → no changes → provisioner does NOT re-run
+terraform apply -auto-approve -var="failover_timestamp=1000000000"
+# null_resource is created → provisioner runs → switchover triggered
+```
+
+Check the zone again — it should have changed:
+
+```bash
+gcloud sql instances describe tf-lab12-pg --format="value(gceZone)"
+```
+
+Now apply with the **same** timestamp:
+
+```bash
+terraform apply -auto-approve -var="failover_timestamp=1000000000"
+# triggers map unchanged → Terraform sees no diff → provisioner does NOT re-run
+```
+
+Check the zone a third time — it should be unchanged, confirming the provisioner did not fire:
+
+```bash
+gcloud sql instances describe tf-lab12-pg --format="value(gceZone)"
 ```
 
 This demonstrates why the pattern uses a unique timestamp: the triggers map must change to force re-execution.
