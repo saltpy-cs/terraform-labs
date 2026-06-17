@@ -311,16 +311,15 @@ is healthy before considering the change complete.
 terraform apply -auto-approve -var="failover_timestamp=$(date +%s)"
 ```
 
-Terraform will create `null_resource.cloud_sql_switchover[0]` and run the `local-exec` provisioner, which calls `gcloud sql instances failover`. Watch the output.
+Terraform will create `null_resource.cloud_sql_switchover[0]` and run the `local-exec` provisioner, which calls `gcloud sql instances failover`. The command returns as soon as GCP accepts the request — the actual promotion takes 30s–2min.
 
-After it completes, check the zones again:
+Poll until the zone changes (Ctrl+C when you see a new zone):
 
 ```bash
-gcloud sql instances describe tf-lab12-pg \
-  --format="value(gceZone, secondaryGceZone)"
+watch -n5 'gcloud sql instances describe tf-lab12-pg --format="value(gceZone,secondaryGceZone)"'
 ```
 
-The primary zone should now differ from where it was before.
+The primary zone should differ from where it was before once the switchover completes.
 
 ### Exercise 8 — Test null_resource idempotency
 
@@ -343,10 +342,10 @@ terraform apply -auto-approve -var="failover_timestamp=1000000000"
 # null_resource is created → provisioner runs → switchover triggered
 ```
 
-Check the zone again — it should have changed:
+The switchover is asynchronous — wait for the zone to change (Ctrl+C when done):
 
 ```bash
-gcloud sql instances describe tf-lab12-pg --format="value(gceZone)"
+watch -n5 'gcloud sql instances describe tf-lab12-pg --format="value(gceZone)"'
 ```
 
 Now apply with the **same** timestamp:
