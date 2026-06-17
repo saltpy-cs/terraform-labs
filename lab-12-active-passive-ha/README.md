@@ -389,21 +389,45 @@ gcloud redis instances describe tf-lab12-redis --region=us-central1 \
 
 ### Exercise 10 — Simulate an application connection
 
-An application tier would connect to these services from within the VPC (e.g. a GCE instance in the same subnet). The connection details are:
+Both Cloud SQL and Memorystore Redis use private IPs only — they are not reachable
+from your laptop. In a real deployment, application instances in the same VPC subnet
+connect directly. This exercise walks through what that connection looks like.
+
+First, retrieve the connection details:
 
 ```bash
-# Cloud SQL — connect via Cloud SQL Auth Proxy using the connection name:
-terraform output cloud_sql_connection_name
-# ./cloud-sql-proxy <connection_name> &
-# psql -h 127.0.0.1 -U appuser -d appdb
-
-# Memorystore Redis — connect directly via private IP:
-terraform output redis_host
-terraform output redis_port
-# redis-cli -h <host> -p 6379
+terraform output cloud_sql_connection_name   # e.g. tf-labs-saltpy:us-central1:tf-lab12-pg
+terraform output cloud_sql_user              # appuser
+terraform output cloud_sql_password          # generated password stored in state
+terraform output redis_host                  # private IP
+terraform output redis_port                  # 6379
 ```
 
-Both endpoints survive a failover: the connection name and the Redis host/port do not change when zones switch.
+To actually connect from your machine, you need the [Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/sql-proxy):
+
+```bash
+# Download (macOS):
+curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.15.2/cloud-sql-proxy.darwin.arm64
+chmod +x cloud-sql-proxy
+
+# Start the proxy (authenticates using your gcloud ADC credentials):
+./cloud-sql-proxy $(terraform output -raw cloud_sql_connection_name) &
+
+# Connect with psql:
+PGPASSWORD=$(terraform output -raw cloud_sql_password) \
+  psql -h 127.0.0.1 -U appuser -d appdb
+
+# Stop the proxy when done:
+kill %1
+```
+
+> Redis cannot be reached from outside the VPC without additional setup (e.g. a bastion
+> VM or IAP tunnel). The `redis_host` output shows the private IP an application in the
+> same subnet would use with `redis-cli -h <host> -p 6379`.
+
+The key point: **both endpoints survive a failover**. The Cloud SQL connection name and
+the Redis host/port do not change when zones switch — your application reconnects to
+the same address and finds the new primary there.
 
 ### Exercise 11 — Cleanup
 
