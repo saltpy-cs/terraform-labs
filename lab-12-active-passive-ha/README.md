@@ -437,17 +437,26 @@ same address and finds the new primary there. Exit the bastion with `exit`.
 
 ### Exercise 11 — Cleanup
 
+This lab requires a two-phase destroy. The PSA (Private Service Access) connection
+cannot be deleted while Cloud SQL or Redis still hold a reference to it in GCP's
+internal state — and that reference lingers for ~60–90 seconds after the services
+are deleted. The `-target` flag here is not bypassing Terraform's model; it is
+explicitly sequencing the destroy to work around a known GCP limitation.
+
 ```bash
+# Phase 1: destroy Cloud SQL, Redis, and the bastion first
+terraform destroy \
+  -target=google_sql_database_instance.primary \
+  -target=google_redis_instance.primary \
+  -target=google_compute_instance.bastion \
+  -auto-approve
+
+# Wait for GCP to release the PSA connection internally (~90 seconds)
+sleep 90
+
+# Phase 2: destroy remaining resources (VPC, PSA connection, etc.)
 terraform destroy -auto-approve
 ```
-
-Cloud SQL takes ~3–5 minutes to destroy.
-
-> **If destroy fails** with `Failed to delete connection; Producer services are still using this connection` — remove the PSA connection from Terraform state and re-run. GCP cleans up the peering automatically when the VPC is deleted:
-> ```bash
-> terraform state rm google_service_networking_connection.private_vpc
-> terraform destroy -auto-approve
-> ```
 
 Confirm all resources are removed:
 
