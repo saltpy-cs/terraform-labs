@@ -443,7 +443,11 @@ terraform destroy -auto-approve
 
 Cloud SQL takes ~3–5 minutes to destroy.
 
-> The PSA connection (`google_service_networking_connection`) is set to `deletion_policy = "ABANDON"` — Terraform drops it from state without calling the GCP delete API. GCP cleans up the peering automatically when the VPC is deleted. This avoids the `Producer services are still using this connection` race condition.
+> **If destroy fails** with `Failed to delete connection; Producer services are still using this connection` — remove the PSA connection from Terraform state and re-run. GCP cleans up the peering automatically when the VPC is deleted:
+> ```bash
+> terraform state rm google_service_networking_connection.private_vpc
+> terraform destroy -auto-approve
+> ```
 
 Confirm all resources are removed:
 

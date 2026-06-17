@@ -71,12 +71,6 @@ resource "google_service_networking_connection" "private_vpc" {
   network                 = google_compute_network.main.id
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.private_ip_alloc.name]
-
-  # ABANDON: Terraform removes this from state without calling the GCP delete
-  # API. GCP cleans up the peering connection automatically when the VPC is
-  # deleted. This avoids the "Producer services are still using this connection"
-  # race condition where GCP's internal state lags after Cloud SQL/Redis deletion.
-  deletion_policy = "ABANDON"
 }
 
 # ─── Cloud SQL (PostgreSQL, REGIONAL HA) ──────────────────────────────────────
