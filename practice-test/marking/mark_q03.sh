@@ -16,7 +16,7 @@ if [[ ! -d "${Q03_DIR}" ]]; then
 fi
 Q03_DIR="$(cd "${Q03_DIR}" && pwd)"
 MAIN_TF="${Q03_DIR}/main.tf"
-BUCKET_FILE="/tmp/practice-bucket-name.txt"
+BUCKET_FILE="${Q03_DIR}/bucket-name.txt"
 EXPECTED_PREFIX="practice/q03"
 
 check() {
@@ -38,10 +38,13 @@ echo "---"
 check 1 "backend \"gcs\" block declared" \
   "$([[ -f "${MAIN_TF}" ]] && grep -q 'backend.*"gcs"' "${MAIN_TF}" && echo true || echo false)"
 
-# 2. bucket argument set (non-empty value or -backend-config used)
-check 1 "bucket argument present in backend or init flags" \
-  "$([[ -f "${MAIN_TF}" ]] && grep -q 'bucket' "${MAIN_TF}" && echo true || \
-     [[ -f "${Q03_DIR}/.terraform/terraform.tfstate" ]] && grep -q '"bucket"' "${Q03_DIR}/.terraform/terraform.tfstate" && echo true || echo false)"
+# 2. bucket argument set in backend block or via -backend-config
+IN_CODE=false
+IN_BACKEND=false
+[[ -f "${MAIN_TF}" ]] && grep -q 'bucket' "${MAIN_TF}" && IN_CODE=true
+[[ -f "${Q03_DIR}/.terraform/terraform.tfstate" ]] && grep -q '"bucket"' "${Q03_DIR}/.terraform/terraform.tfstate" && IN_BACKEND=true
+check 1 "bucket argument present in backend block or -backend-config" \
+  "$([[ "${IN_CODE}" == "true" || "${IN_BACKEND}" == "true" ]] && echo true || echo false)"
 
 # 3. prefix set to practice/q03
 check 1 "prefix is \"practice/q03\"" \

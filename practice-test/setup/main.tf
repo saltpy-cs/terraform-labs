@@ -144,9 +144,10 @@ resource "null_resource" "write_files" {
 
   provisioner "local-exec" {
     command = <<-EOT
-      printf '%s' '${google_storage_bucket.practice_state.name}' > /tmp/practice-bucket-name.txt
-      printf '%s' '${google_storage_bucket.import_target.name}' > /tmp/practice-import-bucket.txt
-      printf '%s' '${google_compute_network.practice.self_link}' > /tmp/practice-vpc-selflink.txt
+      mkdir -p ${path.module}/../q03 ${path.module}/../q04 ${path.module}/../q09
+      printf '%s' '${google_storage_bucket.practice_state.name}' > ${path.module}/../q03/bucket-name.txt
+      printf '%s' '${google_storage_bucket.import_target.name}' > ${path.module}/../q09/import-bucket.txt
+      printf '%s' '${google_compute_network.practice.self_link}' > ${path.module}/../q04/vpc-selflink.txt
     EOT
   }
 }
@@ -201,9 +202,9 @@ output "q07_template_path" {
 output "setup_complete" {
   description = "Summary of files and resources created for the practice test"
   value = {
-    state_bucket_file  = "/tmp/practice-bucket-name.txt  (GCS bucket name for Q3 backend)"
-    import_bucket_file = "/tmp/practice-import-bucket.txt (GCS bucket name for Q9 import)"
-    vpc_selflink_file  = "/tmp/practice-vpc-selflink.txt  (VPC self_link for Q4)"
+    state_bucket_file  = "practice-test/q03/bucket-name.txt  (GCS bucket name for Q3 backend)"
+    import_bucket_file = "practice-test/q09/import-bucket.txt (GCS bucket name for Q9 import)"
+    vpc_selflink_file  = "practice-test/q04/vpc-selflink.txt  (VPC self_link for Q4)"
     q07_template       = "~/tf-practice/q07/startup.sh.tpl"
     work_dirs          = "~/tf-practice/q01 … q12"
   }
