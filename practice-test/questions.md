@@ -16,12 +16,12 @@ All working directories are under `~/tf-practice/`. Create each directory as nee
 
 In `~/tf-practice/q01/`, write a Terraform configuration that:
 1. Declares the `hashicorp/local` provider (version `>= 2.0`).
-2. Creates a `local_file` resource named `practice` that writes the string `Terraform Associate` to the path `/tmp/tf-practice.txt`.
+2. Creates a `local_file` resource named `practice` that writes the string `Terraform Associate` to `${path.module}/tf-practice.txt` (i.e. inside the q01 directory).
 3. Runs `terraform init` and `terraform apply -auto-approve` successfully.
 
 **Verification:**
 ```bash
-cat /tmp/tf-practice.txt
+cat tf-practice.txt
 ```
 Expected output: `Terraform Associate`
 
@@ -60,16 +60,16 @@ null_resource.app[1]
 
 **Objective:** Configure a remote state backend using Google Cloud Storage.
 
-The name of the pre-provisioned GCS bucket is in `/tmp/practice-bucket-name.txt`.
+The name of the pre-provisioned GCS bucket is in `bucket-name.txt` (written to the q03 directory by setup).
 
 In `~/tf-practice/q03/`, write a Terraform configuration that:
-1. Configures a `gcs` backend using the bucket whose name is in `/tmp/practice-bucket-name.txt`, with prefix `practice/q03`.
+1. Configures a `gcs` backend using the bucket whose name is in `bucket-name.txt`, with prefix `practice/q03`.
 2. Declares the `hashicorp/null` provider and at least one `null_resource`.
 3. Runs `terraform init` (you will need to confirm the backend migration if any local state exists) and `terraform apply -auto-approve` successfully.
 
 **Verification:**
 ```bash
-BUCKET=$(cat /tmp/practice-bucket-name.txt)
+BUCKET=$(cat bucket-name.txt)
 gsutil ls "gs://${BUCKET}/practice/"
 ```
 Expected: a line showing a state file under `practice/q03/`.
@@ -80,7 +80,7 @@ Expected: a line showing a state file under `practice/q03/`.
 
 **Objective:** Use a data source to look up existing infrastructure and expose its attributes as an output.
 
-A VPC network named `practice-vpc` was created by the setup script. Its self_link is in `/tmp/practice-vpc-selflink.txt`.
+A VPC network named `practice-vpc` was created by the setup script. Its self_link is in `vpc-selflink.txt` (written to the q04 directory by setup).
 
 In `~/tf-practice/q04/`, write a Terraform configuration that:
 1. Declares the `hashicorp/google` provider.
@@ -92,7 +92,7 @@ In `~/tf-practice/q04/`, write a Terraform configuration that:
 cd ~/tf-practice/q04
 terraform output vpc_self_link
 ```
-Expected: a string matching the value in `/tmp/practice-vpc-selflink.txt`.
+Expected: a string matching the value in `vpc-selflink.txt`.
 
 ---
 
@@ -214,11 +214,11 @@ Expected: a list of three objects. Each object must have a `cidr` and a `descrip
 
 **Objective:** Bring an existing GCS bucket under Terraform management using `terraform import`.
 
-The name of a pre-existing GCS bucket is in `/tmp/practice-import-bucket.txt`.
+The name of a pre-existing GCS bucket is in `import-bucket.txt` (written to the q09 directory by setup).
 
 In `~/tf-practice/q09/`:
 1. Declare the `hashicorp/google` provider with your project set.
-2. Write a `resource "google_storage_bucket" "imported"` block. At minimum it must contain a `name` argument set to the bucket name from `/tmp/practice-import-bucket.txt` and a `location` argument matching the bucket's region (the setup creates it in `US-CENTRAL1`). Keep the block minimal.
+2. Write a `resource "google_storage_bucket" "imported"` block. At minimum it must contain a `name` argument set to the bucket name from `import-bucket.txt` and a `location` argument matching the bucket's region (the setup creates it in `US-CENTRAL1`). Keep the block minimal.
 3. Run `terraform init`.
 4. Run `terraform import google_storage_bucket.imported <bucket-name>` using the name from the file.
 
@@ -457,7 +457,7 @@ terraform {
 }
 
 resource "local_file" "practice" {
-  filename = "/tmp/tf-practice.txt"
+  filename = "${path.module}/tf-practice.txt"
   content  = "Terraform Associate"
 }
 ```
@@ -466,7 +466,7 @@ resource "local_file" "practice" {
 cd ~/tf-practice/q01
 terraform init
 terraform apply -auto-approve
-cat /tmp/tf-practice.txt
+cat tf-practice.txt
 ```
 
 ---
@@ -537,7 +537,7 @@ terraform {
   }
 
   backend "gcs" {
-    bucket = "<paste-bucket-name-here>"   # value from /tmp/practice-bucket-name.txt
+    bucket = "<paste-bucket-name-here>"   # value from bucket-name.txt in this directory
     prefix = "practice/q03"
   }
 }
@@ -546,8 +546,7 @@ resource "null_resource" "q03" {}
 ```
 
 > Note: the `backend` block does not support variable interpolation. You must hard-code the
-> bucket name (copy it from `/tmp/practice-bucket-name.txt`) or use partial configuration
-> with `-backend-config`.
+> bucket name (copy it from `bucket-name.txt`) or use partial configuration with `-backend-config`.
 
 Alternative using partial backend configuration:
 
@@ -566,7 +565,7 @@ resource "null_resource" "q03" {}
 ```
 
 ```bash
-BUCKET=$(cat /tmp/practice-bucket-name.txt)
+BUCKET=$(cat bucket-name.txt)
 terraform init -backend-config="bucket=${BUCKET}"
 terraform apply -auto-approve
 gsutil ls "gs://${BUCKET}/practice/"
@@ -836,14 +835,14 @@ provider "google" {
 }
 
 resource "google_storage_bucket" "imported" {
-  name     = "<paste-bucket-name-here>"   # value from /tmp/practice-import-bucket.txt
+  name     = "<paste-bucket-name-here>"   # value from import-bucket.txt in this directory
   location = "US-CENTRAL1"
   project  = var.gcp_project
 }
 ```
 
 ```bash
-IMPORT_BUCKET=$(cat /tmp/practice-import-bucket.txt)
+IMPORT_BUCKET=$(cat import-bucket.txt)
 cd ~/tf-practice/q09
 terraform init
 terraform import -var="gcp_project=<your-project-id>" \

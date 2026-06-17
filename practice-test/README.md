@@ -72,15 +72,15 @@ terraform init
 terraform apply -auto-approve
 
 # Verify the output files exist
-cat /tmp/practice-bucket-name.txt
-cat /tmp/practice-import-bucket.txt
-cat /tmp/practice-vpc-selflink.txt
+cat ../q03/bucket-name.txt
+cat ../q09/import-bucket.txt
+cat ../q04/vpc-selflink.txt
 ```
 
 The setup provisions:
-- A GCS bucket (random suffix) for use as a remote state backend — name written to `/tmp/practice-bucket-name.txt`
-- A second GCS bucket for the import exercise — name written to `/tmp/practice-import-bucket.txt`
-- A VPC network named `practice-vpc` — self_link written to `/tmp/practice-vpc-selflink.txt`
+- A GCS bucket (random suffix) for use as a remote state backend — name written to `q03/bucket-name.txt`
+- A second GCS bucket for the import exercise — name written to `q09/import-bucket.txt`
+- A VPC network named `practice-vpc` — self_link written to `q04/vpc-selflink.txt`
 - Creates the template file for Q7 at `~/tf-practice/q07/startup.sh.tpl`
 - Creates the base working directory tree `~/tf-practice/`
 
@@ -120,7 +120,6 @@ for q in q01 q02 q04 q05 q06 q07 q08 q10 q11 q12 q13 q14; do
 done
 
 # Q09 and Q03 touch real GCS state — clean up manually if needed
-rm -f /tmp/tf-practice.txt
 
 # Destroy the setup infrastructure (removes the GCS buckets and VPC)
 cd terraform-labs/practice-test/setup
