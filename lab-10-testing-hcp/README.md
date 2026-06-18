@@ -541,3 +541,8 @@ gcloud iam service-accounts keys list \
 ```
 
 `--managed-by user` skips the system-managed keys GCP creates automatically — only the key you generated in Exercise 9 is deleted.
+
+Delete the service account itself:
+```bash
+gcloud iam service-accounts delete "$SA" --quiet
+```
