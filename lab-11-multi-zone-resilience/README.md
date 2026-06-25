@@ -535,11 +535,19 @@ terraform destroy -auto-approve
 ```
 
 This destroys all resources including the load balancer forwarding rule (the main cost
-driver). Verify cleanup:
+driver). The state bucket was created manually so must be deleted separately:
+
+```bash
+STATE_BUCKET="tf-lab11-state-$(gcloud config get-value project)"
+gcloud storage rm -r "gs://${STATE_BUCKET}"
+```
+
+Verify cleanup:
 
 ```bash
 gcloud compute forwarding-rules list | grep tf-lab11 || echo "OK: no forwarding rules"
 gcloud compute instance-groups managed list | grep tf-lab11 || echo "OK: no instance groups"
+gcloud storage buckets list | grep tf-lab11 || echo "OK: no buckets"
 ```
 
-Both commands should print the `OK:` message, confirming nothing remains.
+All commands should print the `OK:` message, confirming nothing remains.
